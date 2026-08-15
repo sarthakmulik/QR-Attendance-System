@@ -27,7 +27,7 @@ type DepartmentFormValues = z.infer<typeof departmentSchema>
 const classSchema = z.object({
   department_id: z.string(),
   name: z.string().min(1, 'Course/Degree Name is required'),
-  semester: z.string().transform((val) => parseInt(val, 10)),
+  semester: z.coerce.number().min(1).max(10),
   division: z.string().min(1, 'Division is required'),
   class_teacher_id: z.string().optional().nullable(),
 })

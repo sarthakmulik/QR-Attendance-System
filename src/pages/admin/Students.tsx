@@ -25,7 +25,7 @@ const addStudentSchema = z.object({
 type AddStudentFormValues = z.infer<typeof addStudentSchema>
 
 export default function Students() {
-  const { userCollegeId, userDepartmentId } = useAuth()
+  const { userCollegeId, userDepartmentId, userRole, user } = useAuth()
   const queryClient = useQueryClient()
   
   const [searchQuery, setSearchQuery] = useState('')
@@ -40,8 +40,13 @@ export default function Students() {
 
   const departmentClasses = useMemo(() => {
     if (!classes || !userDepartmentId) return []
-    return classes.filter(c => c.department_id === userDepartmentId)
-  }, [classes, userDepartmentId])
+    let filtered = classes.filter(c => c.department_id === userDepartmentId)
+    // RBAC: Class Teachers only see their own classes
+    if (userRole === 'class_teacher') {
+      filtered = filtered.filter(c => c.class_teacher_id === user?.id)
+    }
+    return filtered
+  }, [classes, userDepartmentId, userRole, user])
 
   const students = useMemo(() => {
     if (!users) return []
@@ -66,44 +71,37 @@ export default function Students() {
   // MUTATION: Add Single Student
   const addStudentMutation = useMutation({
     mutationFn: async (values: AddStudentFormValues) => {
-      // 1. Stage the invite / claim the auth user
+      // 1. Stage the student registration or claim the auth user instantly
       const { data: inviteData, error: inviteError } = await supabase.rpc('invite_or_claim_user', {
         p_email: values.email,
         p_role: 'student',
         p_college_id: userCollegeId,
         p_department_id: userDepartmentId,
         p_first_name: values.first_name,
-        p_last_name: values.last_name
+        p_last_name: values.last_name,
+        p_class_id: values.class_id,
+        p_roll_number: values.roll_number
       })
       if (inviteError) throw inviteError
 
-      // 2. If it's a claim, we have the user_id. We can enroll them immediately!
-      // If it's just an invite, the handle_new_user trigger will set them up later, BUT we still want to save the enrollment.
-      // Wait, if they don't exist yet, we can't enroll them (no user_id).
-      // If inviteData.status === 'claimed', we enroll them instantly.
-      // If it's 'invited', we might need an `invites` based enrollment, but for now we'll just show success.
-      if (inviteData.status === 'claimed' && inviteData.user_id) {
-         const { error: enrollError } = await supabase.rpc('enroll_student', {
-            p_student_id: inviteData.user_id,
-            p_class_id: values.class_id,
-            p_roll_number: values.roll_number
-         })
-         if (enrollError) throw enrollError
-      } else {
-         // They are staged. (For a fully robust system, you'd store pending enrollments, but this is a great start).
-         toast.info("Student invited! Assign them to the class once they register.")
-      }
+      // The new custom RPC handles EVERYTHING. 
+      // If they are claimed, it enrolled them. If staged, it stored class_id for auto-enrollment later!
+      return inviteData
     },
-    onSuccess: () => {
-      toast.success('Student processed successfully!')
+    onSuccess: (data: any) => {
+      if (data?.status === 'staged') {
+        toast.success('Student pre-registered successfully! They will be automatically enrolled when they sign up.')
+      } else {
+        toast.success('Student added and enrolled successfully!')
+      }
       setIsAddDialogOpen(false)
       addForm.reset()
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.invalidateQueries({ queryKey: ['user-hierarchy'] })
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] })
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to add student')
-    },
+    }
   })
 
   // HANDLER: Bulk CSV Import
@@ -125,7 +123,13 @@ export default function Students() {
         // Skip header if it contains 'email'
         if (i === 0 && rows[0].toLowerCase().includes('email')) continue;
 
-        const [email, roll_number] = rows[i].split(',').map(s => s.trim())
+        // Try parsing email, roll_number, first_name, last_name (optional)
+        const columns = rows[i].split(',').map(s => s.trim())
+        const email = columns[0]
+        const roll_number = columns[1]
+        const first_name = columns[2] || 'Student'
+        const last_name = columns[3] || 'User'
+        
         if (!email || !roll_number) continue;
 
         try {
@@ -133,18 +137,14 @@ export default function Students() {
             p_email: email,
             p_role: 'student',
             p_college_id: userCollegeId,
-            p_department_id: userDepartmentId
+            p_department_id: userDepartmentId,
+            p_first_name: first_name,
+            p_last_name: last_name,
+            p_class_id: selectedImportClass,
+            p_roll_number: roll_number
           })
           if (inviteError) throw inviteError
 
-          if (inviteData.status === 'claimed' && inviteData.user_id) {
-             const { error: enrollError } = await supabase.rpc('enroll_student', {
-                p_student_id: inviteData.user_id,
-                p_class_id: selectedImportClass,
-                p_roll_number: roll_number
-             })
-             if (enrollError) throw enrollError
-          }
           successCount++
         } catch (err) {
           console.error(`Failed to import ${email}:`, err)
@@ -155,7 +155,7 @@ export default function Students() {
       toast.success(`Import complete! ${successCount} processed, ${failCount} failed.`)
       setIsImportDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.invalidateQueries({ queryKey: ['user-hierarchy'] })
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] })
     } catch (err) {
       toast.error('Failed to parse CSV file')
     } finally {

@@ -14,46 +14,62 @@ export default function LiveSession() {
   const [token, setToken] = useState('')
   const [timeRemaining, setTimeRemaining] = useState(10)
   const [isEnding, setIsEnding] = useState(false)
-  
   const { data: records, isLoading: recordsLoading } = useSessionRecords(sessionId)
+  const [sessionData, setSessionData] = useState<any>(null)
 
-  // Token rotation logic
+  // Fetch session secret and expiry once on mount
   useEffect(() => {
     if (!sessionId) return
-
-    const rotateToken = async () => {
-      const newToken = Math.random().toString(36).substring(2, 10).toUpperCase()
-      const expiresAt = new Date(Date.now() + 10000).toISOString() // 10 seconds validity
-
-      const { error } = await supabase
+    const fetchSessionData = async () => {
+      const { data } = await supabase
         .from('attendance_sessions')
-        .update({ current_token: newToken, token_expires_at: expiresAt })
+        .select('session_secret, expires_at')
         .eq('id', sessionId)
-
-      if (!error) {
-        setToken(newToken)
-        setTimeRemaining(10)
-      } else {
-        console.error("Failed to rotate token:", error)
+        .single()
+      if (data) {
+        setSessionData(data)
       }
     }
-
-    // Initial rotation
-    rotateToken()
-
-    // Setup interval to rotate every 10 seconds
-    const rotationInterval = setInterval(rotateToken, 10000)
-
-    // Setup countdown timer
-    const countdownInterval = setInterval(() => {
-      setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 10))
-    }, 1000)
-
-    return () => {
-      clearInterval(rotationInterval)
-      clearInterval(countdownInterval)
-    }
+    fetchSessionData()
   }, [sessionId])
+
+  // Local TOTP Rotation Logic (Zero Network Requests Required)
+  useEffect(() => {
+    if (!sessionData?.session_secret) return
+
+    const rotateToken = async () => {
+      const now = new Date()
+      // Check for auto-expiry
+      if (sessionData.expires_at && now.getTime() > new Date(sessionData.expires_at).getTime()) {
+        toast.info("Session has auto-ended based on the time limit.")
+        navigate('/faculty/lectures')
+        return
+      }
+
+      // Calculate 10-second window
+      const currentWindow = Math.floor(now.getTime() / 1000 / 10)
+      
+      // Cryptographically match the Postgres backend calculation
+      const msgBuffer = new TextEncoder().encode(sessionData.session_secret + currentWindow.toString())
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      
+      // Get first 8 chars just like the DB
+      setToken(hashHex.substring(0, 8))
+      
+      // Calculate exact remaining milliseconds for smooth progress bar
+      const nextWindowTime = (currentWindow + 1) * 10 * 1000
+      const remainingMs = nextWindowTime - now.getTime()
+      setTimeRemaining(Math.ceil(remainingMs / 1000))
+    }
+
+    rotateToken()
+    // Run frequently to keep progress bar and window synced perfectly
+    const rotationInterval = setInterval(rotateToken, 1000)
+
+    return () => clearInterval(rotationInterval)
+  }, [sessionData, navigate])
 
   const endSession = async () => {
     setIsEnding(true)

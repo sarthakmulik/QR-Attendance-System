@@ -387,6 +387,19 @@ export default function Departments() {
                                     <UsersIcon size={12} className="text-indigo-500" />
                                     {teacher ? `${teacher.first_name} ${teacher.last_name}` : <span className="text-amber-500 italic">No Teacher Assigned</span>}
                                   </div>
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-3 w-full text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+                                    onClick={() => {
+                                      const url = `${window.location.origin}/display/${cls.id}/${cls.display_token}`
+                                      navigator.clipboard.writeText(url)
+                                      toast.success("Projector URL copied to clipboard!")
+                                    }}
+                                  >
+                                    Copy Projector Link
+                                  </Button>
                                 </div>
                               </div>
                             </div>

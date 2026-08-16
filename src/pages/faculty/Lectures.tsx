@@ -16,6 +16,7 @@ export default function Lectures() {
   const [activeTab, setActiveTab] = useState<'my' | 'dept' | 'adhoc'>('my')
   const [selectedClassId, setSelectedClassId] = useState('')
   const [selectedSubjectId, setSelectedSubjectId] = useState('')
+  const [sessionDuration, setSessionDuration] = useState(60) // default 1 hour
 
   const { data: timetable, isLoading: isLoadingTimetable } = useTimetable()
   const { data: classes, isLoading: isLoadingClasses } = useClasses()
@@ -31,9 +32,8 @@ export default function Lectures() {
   const otherLectures = timetable?.filter((t: any) => t.faculty_id !== user?.id && t.day_of_week === activeDay) || []
 
   const startSessionMutation = useMutation({
-    mutationFn: async (payload: { timetableId?: string, classId?: string, subjectId?: string }) => {
-      const token = Math.random().toString(36).substring(2, 10).toUpperCase()
-      const expiresAt = new Date(Date.now() + 10000).toISOString() // 10 seconds
+    mutationFn: async (payload: { timetableId?: string, classId?: string, subjectId?: string, duration: number }) => {
+      const expiresAt = new Date(Date.now() + payload.duration * 60000).toISOString()
 
       const { data, error } = await supabase
         .from('attendance_sessions')
@@ -42,8 +42,7 @@ export default function Lectures() {
           class_id: payload.classId || null,
           subject_id: payload.subjectId || null,
           faculty_id: user?.id,
-          current_token: token,
-          token_expires_at: expiresAt,
+          expires_at: expiresAt,
           is_active: true
         })
         .select()
@@ -66,7 +65,7 @@ export default function Lectures() {
       toast.error("Please select both a Class and a Subject.")
       return
     }
-    startSessionMutation.mutate({ classId: selectedClassId, subjectId: selectedSubjectId })
+    startSessionMutation.mutate({ classId: selectedClassId, subjectId: selectedSubjectId, duration: sessionDuration })
   }
 
   // Helper to render lecture cards
@@ -118,7 +117,7 @@ export default function Lectures() {
               </div>
               
               <Button 
-                onClick={() => startSessionMutation.mutate({ timetableId: lecture.id })}
+                onClick={() => startSessionMutation.mutate({ timetableId: lecture.id, duration: sessionDuration })}
                 disabled={startSessionMutation.isPending}
                 className="gap-2 bg-green-600 hover:bg-green-700"
               >
@@ -138,9 +137,29 @@ export default function Lectures() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Live Lectures Hub</h1>
-        <p className="text-slate-500 text-sm mt-1">Start a scheduled class, substitute for another teacher, or launch an extra lecture.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Live Lectures Hub</h1>
+          <p className="text-slate-500 text-sm mt-1">Start a scheduled class, substitute for another teacher, or launch an extra lecture.</p>
+        </div>
+        
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex items-center gap-3 shadow-sm">
+          <Clock size={16} className="text-primary" />
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-slate-500 uppercase">Auto-End Session In</span>
+            <select 
+              className="bg-transparent text-sm font-medium focus:outline-none cursor-pointer"
+              value={sessionDuration}
+              onChange={(e) => setSessionDuration(Number(e.target.value))}
+            >
+              <option value={30}>30 Minutes</option>
+              <option value={45}>45 Minutes</option>
+              <option value={60}>1 Hour</option>
+              <option value={90}>1.5 Hours</option>
+              <option value={120}>2 Hours</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Ongoing Sessions Banner */}

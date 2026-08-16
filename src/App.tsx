@@ -16,6 +16,7 @@ import Lectures from './pages/faculty/Lectures'
 import LiveSession from './pages/faculty/LiveSession'
 import Reports from './pages/faculty/Reports'
 import Scanner from './pages/student/Scanner'
+import ProjectorDisplay from './pages/public/ProjectorDisplay'
 import Settings from './pages/Settings'
 
 const queryClient = new QueryClient({
@@ -33,7 +34,9 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
+            {/* Public Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/display/:classId/:token" element={<ProjectorDisplay />} />
             
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
@@ -43,19 +46,19 @@ function App() {
                 <Route path="/departments" element={<Departments />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/subjects" element={<Subjects />} />
-              <Route path="/timetable" element={<Timetable />} />
-              <Route path="/students" element={<Students />} />
+                <Route path="/timetable" element={<Timetable />} />
+                <Route path="/students" element={<Students />} />
               
-              {/* Faculty Routes */}
-              <Route path="/faculty/lectures" element={<Lectures />} />
-              <Route path="/faculty/live-session/:sessionId" element={<LiveSession />} />
-              <Route path="/faculty/reports" element={<Reports />} />
+                {/* Faculty Routes */}
+                <Route path="/faculty/lectures" element={<Lectures />} />
+                <Route path="/faculty/live-session/:sessionId" element={<LiveSession />} />
+                <Route path="/faculty/reports" element={<Reports />} />
               
-              {/* Student Routes */}
-              <Route path="/student/scan" element={<Scanner />} />
+                {/* Student Routes */}
+                <Route path="/student/scan" element={<Scanner />} />
               
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            </Route>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              </Route>
             </Route>
           </Routes>
         </Router>

@@ -103,7 +103,9 @@ export function useActiveSessions() {
             start_time, end_time, room_number,
             classes ( name ),
             subjects ( name, code )
-          )
+          ),
+          classes ( name ),
+          subjects ( name, code )
         `)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
@@ -140,7 +142,7 @@ export function useClasses() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('classes')
-        .select('*, departments(name)')
+        .select('*, departments(name, college_id)')
         .order('semester', { ascending: true })
       if (error) throw error
       return data

@@ -12,7 +12,7 @@ export default function LiveSession() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const [token, setToken] = useState('')
-  const [timeRemaining, setTimeRemaining] = useState(15)
+  const [timeRemaining, setTimeRemaining] = useState(10)
   const [isEnding, setIsEnding] = useState(false)
   
   const { data: records, isLoading: recordsLoading } = useSessionRecords(sessionId)
@@ -23,7 +23,7 @@ export default function LiveSession() {
 
     const rotateToken = async () => {
       const newToken = Math.random().toString(36).substring(2, 10).toUpperCase()
-      const expiresAt = new Date(Date.now() + 15000).toISOString() // 15 seconds validity
+      const expiresAt = new Date(Date.now() + 10000).toISOString() // 10 seconds validity
 
       const { error } = await supabase
         .from('attendance_sessions')
@@ -32,7 +32,7 @@ export default function LiveSession() {
 
       if (!error) {
         setToken(newToken)
-        setTimeRemaining(15)
+        setTimeRemaining(10)
       } else {
         console.error("Failed to rotate token:", error)
       }
@@ -41,12 +41,12 @@ export default function LiveSession() {
     // Initial rotation
     rotateToken()
 
-    // Setup interval to rotate every 10 seconds (giving 5 seconds buffer)
+    // Setup interval to rotate every 10 seconds
     const rotationInterval = setInterval(rotateToken, 10000)
 
     // Setup countdown timer
     const countdownInterval = setInterval(() => {
-      setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0))
+      setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 10))
     }, 1000)
 
     return () => {
@@ -139,7 +139,7 @@ export default function LiveSession() {
               <div className="absolute -bottom-6 left-0 right-0 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary transition-all duration-1000 ease-linear"
-                  style={{ width: `${(timeRemaining / 15) * 100}%` }}
+                  style={{ width: `${(timeRemaining / 10) * 100}%` }}
                 />
               </div>
             </div>

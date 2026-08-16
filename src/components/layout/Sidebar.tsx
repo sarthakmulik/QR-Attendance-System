@@ -4,7 +4,12 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 
-export default function Sidebar() {
+interface SidebarProps {
+  isMobileOpen?: boolean;
+  setIsMobileOpen?: (open: boolean) => void;
+}
+
+export default function Sidebar({ isMobileOpen = false, setIsMobileOpen }: SidebarProps) {
   const { userRole, signOut } = useAuth()
   // Default to student if role is still loading or null to be safe
   const currentRole = userRole || 'student'
@@ -30,8 +35,15 @@ export default function Sidebar() {
     // No need to redirect via window.location.href, ProtectedRoute will handle it!
   }
 
+  const handleLinkClick = () => {
+    if (setIsMobileOpen) setIsMobileOpen(false)
+  }
+
   return (
-    <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+    <aside className={cn(
+      "fixed md:static inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 shrink-0",
+      isMobileOpen ? "translate-x-0" : "-translate-x-full"
+    )}>
       <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
           <div className="bg-primary text-white p-1.5 rounded-lg">
@@ -46,9 +58,10 @@ export default function Sidebar() {
         {visibleLinks.map((link) => {
           const Icon = link.icon
           return (
-            <NavLink
+              <NavLink
               key={link.name}
               to={link.href}
+              onClick={handleLinkClick}
               className={({ isActive }) => cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive 

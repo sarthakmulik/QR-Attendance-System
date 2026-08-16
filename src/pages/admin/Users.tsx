@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, MoreVertical, Users as UsersIcon, Loader2 } from 'lucide-react'
+import { Plus, MoreVertical, Users as UsersIcon, Loader2, UserPlus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ const userSchema = z.object({
   role: z.enum(['super_admin', 'principal', 'hod', 'class_teacher', 'faculty', 'student']),
   college_id: z.string().optional(),
   department_id: z.string().optional(),
+  class_id: z.string().optional().nullable(),
 })
 
 type UserFormValues = z.infer<typeof userSchema>
@@ -79,21 +80,29 @@ export default function Users() {
 
   const inviteUserMutation = useMutation({
     mutationFn: async (values: UserFormValues) => {
-      // Use the secure RPC which handles both claiming existing users and inviting new ones without 409 errors
+      // Use the secure RPC which handles both claiming existing users and pre-registering new ones seamlessly
       const { data, error } = await supabase.rpc('invite_or_claim_user', {
         p_email: values.email,
         p_role: values.role,
         p_college_id: userRole === 'super_admin' ? (values.college_id || null) : userCollegeId,
-        p_department_id: (userRole === 'super_admin' || userRole === 'principal') ? (values.department_id || null) : userDepartmentId
+        p_department_id: (userRole === 'super_admin' || userRole === 'principal') ? (values.department_id || null) : userDepartmentId,
+        p_first_name: values.first_name,
+        p_last_name: values.last_name,
+        p_class_id: values.class_id || null
       })
       
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      toast.success('User invited! Their role will be assigned automatically when they sign up.')
+    onSuccess: (data: any) => {
+      if (data?.status === 'staged') {
+        toast.success('User pre-registered successfully! Their role will be assigned automatically when they sign up.')
+      } else {
+        toast.success('User added and updated successfully!')
+      }
       setIsDialogOpen(false)
       form.reset()
+      queryClient.invalidateQueries({ queryKey: ['user-hierarchy'] })
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to stage user invite')
@@ -101,21 +110,19 @@ export default function Users() {
   })
 
   const updateUserMutation = useMutation({
-    mutationFn: async (values: EditRoleFormValues & { userId: string }) => {
-      const updateData: any = { role: values.role }
-      
-      // If role requires a department, ensure it's passed or keep it null.
-      // If role does NOT require a department, strictly set it to null.
-      if (values.role === 'super_admin' || values.role === 'principal' || values.role === 'student') {
-         updateData.department_id = null
-      } else {
-         updateData.department_id = values.department_id || null
-      }
-
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', values.userId)
+    mutationFn: async (values: EditRoleFormValues & { userId: string, email: string }) => {
+      // We reuse the exact same RPC which perfectly handles existing users, updates their role, 
+      // and safely triggers class enrollments or class teacher assignments.
+      const { data, error } = await supabase.rpc('invite_or_claim_user', {
+        p_email: values.email,
+        p_role: values.role,
+        p_college_id: userRole === 'super_admin' ? null : userCollegeId,
+        p_department_id: values.role === 'student' ? null : (values.department_id || null),
+        p_first_name: null, // Keeps existing
+        p_last_name: null,  // Keeps existing
+        p_class_id: values.class_id || null,
+        p_roll_number: values.roll_number || null
+      })
       
       if (error) throw error
     },
@@ -123,15 +130,16 @@ export default function Users() {
       toast.success('User role updated successfully!')
       setIsEditDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ['user-hierarchy'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to update user role')
-    }
+    },
   })
 
   const onEditSubmit = (values: EditRoleFormValues) => {
     if (editingUser) {
-      updateUserMutation.mutate({ ...values, userId: editingUser.id })
+      updateUserMutation.mutate({ ...values, userId: editingUser.id, email: editingUser.email })
     }
   }
 
@@ -165,17 +173,17 @@ export default function Users() {
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-sm">
-              <Plus size={16} />
-              Invite User
+            <Button onClick={() => setIsDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add User
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>Invite New User</DialogTitle>
+                <DialogTitle>Add New User</DialogTitle>
                 <DialogDescription>
-                  Send an invitation to a new admin or faculty member.
+                  Pre-register a new user and assign their role and department.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
@@ -267,12 +275,34 @@ export default function Users() {
                   </div>
                 )}
 
+                {selectedRole === 'class_teacher' && selectedCollege && (
+                  <div className="space-y-2 animate-in fade-in zoom-in-95">
+                    <Label htmlFor="class_id">Assign to Class</Label>
+                    <Controller
+                      control={form.control}
+                      name="class_id"
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} defaultValue={field.value || undefined}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a class" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {classes?.filter((c: any) => c.department_id === (form.getValues('department_id') || userDepartmentId)).map((cls: any) => (
+                              <SelectItem key={cls.id} value={cls.id}>{cls.name} (Sem {cls.semester})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                )}
+
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={inviteUserMutation.isPending}>
                   {inviteUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Send Invite
+                  Add User
                 </Button>
               </DialogFooter>
             </form>
@@ -344,40 +374,38 @@ export default function Users() {
                   />
                 </div>
               )}
-              {/* ENROLLMENT FIELDS FOR STUDENTS */}
-              {selectedEditRole === 'student' && (
-                <div className="space-y-4 animate-in fade-in zoom-in-95 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="class_id">Class / Classroom</Label>
-                    <Controller
-                      name="class_id"
-                      control={editForm.control}
-                      render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a class" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {classes?.filter((c: any) => c.department_id === (editingUser?.department_id || userDepartmentId)).map((cls: any) => (
-                              <SelectItem key={cls.id} value={cls.id}>
-                                {cls.name} (Sem {cls.semester})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
+                {/* ENROLLMENT FIELDS FOR STUDENTS AND CLASS TEACHERS */}
+                {(selectedEditRole === 'student' || selectedEditRole === 'class_teacher') && (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="class_id">{selectedEditRole === 'class_teacher' ? 'Assign to Class' : 'Class / Classroom'}</Label>
+                      <Controller
+                        name="class_id"
+                        control={editForm.control}
+                        render={({ field }) => (
+                          <Select onValueChange={field.onChange} value={field.value || undefined}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a class" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {classes?.filter((c: any) => c.department_id === (editingUser?.department_id || userDepartmentId)).map((cls: any) => (
+                                <SelectItem key={cls.id} value={cls.id}>
+                                  {cls.name} (Sem {cls.semester})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                    {selectedEditRole === 'student' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="roll_number">Roll Number</Label>
+                        <Input id="roll_number" placeholder="e.g. CS2024-001" {...editForm.register('roll_number')} />
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="roll_number">Roll Number</Label>
-                    <Input 
-                      id="roll_number" 
-                      placeholder="e.g. CS2024-001" 
-                      {...editForm.register('roll_number')} 
-                    />
-                  </div>
-                </div>
-              )}
+                )}
 
 
             </div>

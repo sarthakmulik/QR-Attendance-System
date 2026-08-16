@@ -100,7 +100,11 @@ export default function Departments() {
 
   const createClassMutation = useMutation({
     mutationFn: async (values: ClassFormValues) => {
-      const { data, error } = await supabase.from('classes').insert(values)
+      const payload = { ...values }
+      if (payload.class_teacher_id === 'none') {
+        payload.class_teacher_id = null
+      }
+      const { data, error } = await supabase.from('classes').insert(payload)
       if (error) throw error
       return data
     },
@@ -303,8 +307,8 @@ export default function Departments() {
 
             return (
               <AccordionItem key={dept.id} value={dept.id} className="relative border-none bg-white dark:bg-slate-950 rounded-xl shadow-sm overflow-hidden px-2">
-                <AccordionTrigger className="hover:no-underline px-4 py-5 group">
-                  <div className="flex items-center justify-between w-full pr-4">
+                <div className="flex items-center justify-between w-full">
+                  <AccordionTrigger className="hover:no-underline px-4 py-5 group flex-1">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform">
                         <Building size={24} />
@@ -319,27 +323,27 @@ export default function Departments() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
-                      {userRole !== 'hod' && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
-                              <MoreVertical size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem 
-                              onClick={() => deleteDepartmentMutation.mutate(dept.id)}
-                              className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
-                            >
-                              Delete Department
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
+                  </AccordionTrigger>
+                  <div className="flex items-center gap-4 pr-4">
+                    {userRole !== 'hod' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem 
+                            onClick={() => deleteDepartmentMutation.mutate(dept.id)}
+                            className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
+                          >
+                            Delete Department
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
-                </AccordionTrigger>
+                </div>
                 
                 <AccordionContent className="px-4 pb-6">
                   <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">

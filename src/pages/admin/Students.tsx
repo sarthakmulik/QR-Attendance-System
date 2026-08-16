@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Plus, Upload, Search, Loader2 } from 'lucide-react'
+import { Plus, Upload, Search, Loader2, MapPin } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,14 +39,28 @@ export default function Students() {
   const { data: classes } = useClasses()
 
   const departmentClasses = useMemo(() => {
-    if (!classes || !userDepartmentId) return []
-    let filtered = classes.filter(c => c.department_id === userDepartmentId)
-    // RBAC: Class Teachers only see their own classes
-    if (userRole === 'class_teacher') {
-      filtered = filtered.filter(c => c.class_teacher_id === user?.id)
+    if (!classes) return []
+    let filtered = classes
+
+    if (userRole === 'super_admin') {
+      return filtered
     }
-    return filtered
-  }, [classes, userDepartmentId, userRole, user])
+    
+    if (userRole === 'principal') {
+      return filtered.filter(c => c.departments?.college_id === userCollegeId)
+    }
+    
+    if (userRole === 'hod' || userRole === 'faculty') {
+      return filtered.filter(c => c.department_id === userDepartmentId)
+    }
+
+    // RBAC: Class Teachers only see their own explicitly assigned classes
+    if (userRole === 'class_teacher') {
+      return filtered.filter(c => c.class_teacher_id === user?.id)
+    }
+    
+    return []
+  }, [classes, userDepartmentId, userCollegeId, userRole, user])
 
   const students = useMemo(() => {
     if (!users) return []
@@ -164,6 +178,61 @@ export default function Students() {
     }
   }
 
+  // GEOLOCATION SETUP
+  const [isClassSettingsOpen, setIsClassSettingsOpen] = useState(false)
+  const [selectedLocationClass, setSelectedLocationClass] = useState('')
+  const [isLocating, setIsLocating] = useState(false)
+
+  const setLocationMutation = useMutation({
+    mutationFn: async ({ classId, lat, lng }: { classId: string, lat: number, lng: number }) => {
+      const { error } = await supabase
+        .from('classes')
+        .update({ latitude: lat, longitude: lng })
+        .eq('id', classId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('Classroom GPS coordinates locked securely!')
+      setIsClassSettingsOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['classes'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update location')
+    }
+  })
+
+  const handleSetLocation = () => {
+    if (!selectedLocationClass) {
+      toast.error('Please select a class first')
+      return
+    }
+    setIsLocating(true)
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocationMutation.mutate({
+            classId: selectedLocationClass,
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
+          setIsLocating(false)
+        },
+        (error) => {
+          setIsLocating(false)
+          if (error.code === error.PERMISSION_DENIED) {
+            toast.error('You must allow Location permissions to set the classroom location.')
+          } else {
+            toast.error('Failed to get location. Please try again.')
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    } else {
+      setIsLocating(false)
+      toast.error('Geolocation is not supported by your browser.')
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -173,6 +242,51 @@ export default function Students() {
         </div>
         <div className="flex gap-2">
           
+          {/* GEOLOCATION/CLASS SETTINGS MODAL */}
+          {userRole === 'class_teacher' && (
+            <Dialog open={isClassSettingsOpen} onOpenChange={setIsClassSettingsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 shadow-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                  <MapPin size={16} />
+                  Set Classroom Location
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Set Classroom GPS Location</DialogTitle>
+                  <DialogDescription>
+                    Lock the physical location of your classroom to prevent proxy attendance. 
+                    You must physically be in the classroom to do this.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Target Class</Label>
+                    <Select onValueChange={setSelectedLocationClass} value={selectedLocationClass}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a class" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departmentClasses.map((cls: any) => (
+                          <SelectItem key={cls.id} value={cls.id}>
+                            {cls.name} (Sem {cls.semester})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsClassSettingsOpen(false)}>Cancel</Button>
+                  <Button type="button" onClick={handleSetLocation} disabled={isLocating || setLocationMutation.isPending}>
+                    {(isLocating || setLocationMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Lock Location
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
           {/* IMPORT MODAL */}
           <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
             <DialogTrigger asChild>
@@ -191,18 +305,25 @@ export default function Students() {
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Target Class</Label>
-                  <Select onValueChange={setSelectedImportClass} value={selectedImportClass}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a class for import" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departmentClasses.map((cls: any) => (
-                        <SelectItem key={cls.id} value={cls.id}>
-                          {cls.name} (Sem {cls.semester})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Select onValueChange={setSelectedImportClass} value={selectedImportClass}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a class for import" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departmentClasses.map((cls: any) => (
+                          <SelectItem key={cls.id} value={cls.id}>
+                            {cls.name} (Sem {cls.semester})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {departmentClasses.length === 0 && (
+                       <p className="text-xs text-orange-500">
+                         {userRole === 'class_teacher' 
+                           ? "You are not assigned as a Class Teacher to any class yet." 
+                           : "No classes available."}
+                       </p>
+                    )}
                 </div>
                 <div className="space-y-2">
                   <Label>CSV File</Label>
@@ -254,21 +375,30 @@ export default function Students() {
                   <div className="space-y-2">
                     <Label>Class</Label>
                     <Controller
-                      name="class_id"
                       control={addForm.control}
+                      name="class_id"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select class" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {departmentClasses.map((cls: any) => (
-                              <SelectItem key={cls.id} value={cls.id}>
-                                {cls.name} (Sem {cls.semester})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="space-y-1">
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select class" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departmentClasses.map((cls: any) => (
+                                <SelectItem key={cls.id} value={cls.id}>
+                                  {cls.name} (Sem {cls.semester})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {departmentClasses.length === 0 && (
+                             <p className="text-xs text-orange-500">
+                               {userRole === 'class_teacher' 
+                                 ? "You are not assigned as a Class Teacher to any class yet." 
+                                 : "No classes available."}
+                             </p>
+                          )}
+                        </div>
                       )}
                     />
                   </div>

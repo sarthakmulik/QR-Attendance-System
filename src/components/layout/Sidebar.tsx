@@ -20,7 +20,7 @@ export default function Sidebar({ isMobileOpen = false, setIsMobileOpen }: Sideb
     { name: 'Departments', href: '/departments', icon: Building, roles: ['super_admin', 'principal'] },
     { name: 'Users', href: '/users', icon: Users, roles: ['super_admin', 'principal', 'hod'] },
     { name: 'Subjects', href: '/subjects', icon: BookOpen, roles: ['super_admin', 'principal', 'hod'] },
-    { name: 'Master Timetable', href: '/timetable', icon: Calendar, roles: ['super_admin', 'principal', 'hod'] },
+    { name: 'Master Timetable', href: '/timetable', icon: Calendar, roles: ['super_admin', 'principal', 'hod', 'class_teacher'] },
     { name: 'My Lectures', href: '/faculty/lectures', icon: Clock, roles: ['class_teacher', 'faculty', 'super_admin'] },
     { name: 'Reports', href: '/faculty/reports', icon: FileSpreadsheet, roles: ['super_admin', 'principal', 'hod', 'class_teacher', 'faculty'] },
     { name: 'Students', href: '/students', icon: GraduationCap, roles: ['super_admin', 'principal', 'hod', 'class_teacher'] },

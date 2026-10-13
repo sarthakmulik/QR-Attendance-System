@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus, MoreVertical, BookOpen, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,14 @@ export default function Subjects() {
   const queryClient = useQueryClient()
   const { data: subjects, isLoading } = useSubjects()
   const { data: departments } = useDepartments()
+
+  const visibleSubjects = useMemo(() => {
+    if (!subjects) return []
+    if (userRole === 'hod' && userDepartmentId) {
+      return subjects.filter((s: any) => s.department_id === userDepartmentId)
+    }
+    return subjects
+  }, [subjects, userRole, userDepartmentId])
 
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
@@ -200,7 +208,7 @@ export default function Subjects() {
                     Loading subjects...
                   </td>
                 </tr>
-              ) : !subjects || subjects.length === 0 ? (
+              ) : !visibleSubjects || visibleSubjects.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
@@ -213,7 +221,7 @@ export default function Subjects() {
                   </td>
                 </tr>
               ) : (
-                subjects.map((subject: any) => (
+                visibleSubjects.map((subject: any) => (
                   <tr key={subject.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                     <td className="px-6 py-4">
                       <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-xs font-mono font-medium text-slate-700 dark:text-slate-300">

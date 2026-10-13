@@ -36,9 +36,16 @@ export function useUsers() {
       const { data, error } = await supabase
         .from('users')
         .select(`
-          id, first_name, last_name, email, role,
+          id, first_name, last_name, email, role, created_at,
+          college_id, department_id,
           colleges(name),
-          departments(name)
+          departments(name),
+          enrollments (
+            roll_number,
+            classes (
+              id, name, semester, class_teacher_id
+            )
+          )
         `)
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -142,7 +149,7 @@ export function useClasses() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('classes')
-        .select('*, departments(name, college_id)')
+        .select('*, departments(name, college_id), class_teacher_id, display_token')
         .order('semester', { ascending: true })
       if (error) throw error
       return data
@@ -187,14 +194,9 @@ export function useLowAttendanceReport(threshold: number = 75) {
   return useQuery({
     queryKey: ['low-attendance-report', threshold],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('student_attendance_stats')
-        .select('*')
-        .lt('attendance_percentage', threshold)
-        .order('attendance_percentage', { ascending: true })
-        .limit(10)
+      const { data, error } = await supabase.rpc('get_faculty_defaulters', { p_threshold: threshold })
       if (error) throw error
-      return data
+      return data || []
     },
   })
 }
@@ -220,5 +222,16 @@ export function useGlobalRecentScans() {
       return data
     },
     refetchInterval: 5000, // 5 seconds live feed
+  })
+}
+
+export function useFacultyAudit() {
+  return useQuery({
+    queryKey: ['faculty-audit'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_faculty_audit_report')
+      if (error) throw error
+      return data || []
+    },
   })
 }

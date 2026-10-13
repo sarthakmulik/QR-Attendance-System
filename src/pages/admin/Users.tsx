@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus, MoreVertical, Users as UsersIcon, Loader2, UserPlus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -50,12 +50,32 @@ export default function Users() {
   })
 
   const selectedEditRole = editForm.watch('role')
+  const selectedEditDeptId = editForm.watch('department_id')
   
   const queryClient = useQueryClient()
   const { data: hierarchy, isLoading } = useUserHierarchy()
   const { data: colleges } = useColleges()
   const { data: departments } = useDepartments()
   const { data: classes } = useClasses()
+
+  const availableEditClasses = useMemo(() => {
+    if (!classes) return []
+    if (selectedEditDeptId) {
+      return classes.filter((c: any) => c.department_id === selectedEditDeptId)
+    }
+    if (userRole === 'super_admin') {
+      return classes
+    }
+    if (userRole === 'principal') {
+      const colId = editingUser?.college_id || userCollegeId
+      return colId ? classes.filter((c: any) => c.departments?.college_id === colId) : classes
+    }
+    if (userRole === 'hod') {
+      const deptId = userDepartmentId || editingUser?.department_id
+      return deptId ? classes.filter((c: any) => c.department_id === deptId) : classes
+    }
+    return classes
+  }, [classes, selectedEditDeptId, userRole, userCollegeId, userDepartmentId, editingUser])
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -111,20 +131,23 @@ export default function Users() {
 
   const updateUserMutation = useMutation({
     mutationFn: async (values: EditRoleFormValues & { userId: string, email: string }) => {
-      // We reuse the exact same RPC which perfectly handles existing users, updates their role, 
-      // and safely triggers class enrollments or class teacher assignments.
+      const selectedClass = classes?.find((c: any) => c.id === values.class_id)
+      const targetDeptId = values.department_id || selectedClass?.department_id || (userRole === 'hod' ? userDepartmentId : editingUser?.department_id) || null
+      const targetCollegeId = userRole === 'super_admin' ? null : (editingUser?.college_id || userCollegeId || selectedClass?.departments?.college_id || null)
+
       const { data, error } = await supabase.rpc('invite_or_claim_user', {
         p_email: values.email,
         p_role: values.role,
-        p_college_id: userRole === 'super_admin' ? null : userCollegeId,
-        p_department_id: values.role === 'student' ? null : (values.department_id || null),
+        p_college_id: targetCollegeId,
+        p_department_id: targetDeptId,
         p_first_name: null, // Keeps existing
         p_last_name: null,  // Keeps existing
-        p_class_id: values.class_id || null,
+        p_class_id: values.class_id && values.class_id !== 'none' ? values.class_id : null,
         p_roll_number: values.roll_number || null
       })
       
       if (error) throw error
+      return data
     },
     onSuccess: () => {
       toast.success('User role updated successfully!')
@@ -388,7 +411,8 @@ export default function Users() {
                               <SelectValue placeholder="Select a class" />
                             </SelectTrigger>
                             <SelectContent>
-                              {classes?.filter((c: any) => c.department_id === (editingUser?.department_id || userDepartmentId)).map((cls: any) => (
+                              <SelectItem value="none">-- Unassigned --</SelectItem>
+                              {availableEditClasses.map((cls: any) => (
                                 <SelectItem key={cls.id} value={cls.id}>
                                   {cls.name} (Sem {cls.semester})
                                 </SelectItem>
@@ -428,7 +452,12 @@ export default function Users() {
           userRole={userRole} 
           onEditRole={(user) => {
             setEditingUser(user)
-            editForm.reset({ role: user.role, department_id: user.departments?.id || null, class_id: user.class_id || null, roll_number: user.roll_number || '' })
+            editForm.reset({ 
+              role: user.role, 
+              department_id: user.department_id || user.departments?.id || null, 
+              class_id: user.class_id || user.assignedClasses?.[0]?.id || null, 
+              roll_number: user.roll_number || '' 
+            })
             setIsEditDialogOpen(true)
           }} 
         />

@@ -13,6 +13,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useTimetable, useClasses, useSubjects, useUsers } from '@/hooks/queries'
+import { useAuth } from '@/context/AuthContext'
+import { useMemo } from 'react'
 
 const lectureSchema = z.object({
   class_id: z.string().min(1, 'Please select a class'),
@@ -37,9 +39,38 @@ export default function Timetable() {
   const { data: classes } = useClasses()
   const { data: subjects } = useSubjects()
   const { data: users } = useUsers()
+  const { user, userRole, userDepartmentId } = useAuth()
   
+  // Filter classes for Class Teacher or HOD
+  const filteredClasses = useMemo(() => {
+    if (!classes) return []
+    if (userRole === 'class_teacher') {
+      return classes.filter((c: any) => c.class_teacher_id === user?.id)
+    }
+    if (userRole === 'hod' && userDepartmentId) {
+      return classes.filter((c: any) => c.department_id === userDepartmentId)
+    }
+    return classes
+  }, [classes, userRole, user, userDepartmentId])
+
+  // Filter subjects for HOD
+  const filteredSubjects = useMemo(() => {
+    if (!subjects) return []
+    if (userRole === 'hod' && userDepartmentId) {
+      return subjects.filter((s: any) => s.department_id === userDepartmentId)
+    }
+    return subjects
+  }, [subjects, userRole, userDepartmentId])
+
   // Filter for faculty users
-  const facultyUsers = users?.filter((u: any) => u.role === 'faculty' || u.role === 'hod' || u.role === 'class_teacher') || []
+  const facultyUsers = useMemo(() => {
+    if (!users) return []
+    const faculty = users.filter((u: any) => u.role === 'faculty' || u.role === 'hod' || u.role === 'class_teacher')
+    if (userRole === 'hod' && userDepartmentId) {
+      return faculty.filter((u: any) => u.department_id === userDepartmentId)
+    }
+    return faculty
+  }, [users, userRole, userDepartmentId])
 
   const form = useForm<LectureFormValues>({
     resolver: zodResolver(lectureSchema),
@@ -126,13 +157,20 @@ export default function Timetable() {
                             <SelectValue placeholder="Select class" />
                           </SelectTrigger>
                           <SelectContent>
-                            {classes?.map((cls: any) => (
+                            {filteredClasses?.map((cls: any) => (
                               <SelectItem key={cls.id} value={cls.id}>{cls.name} (Sem {cls.semester})</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       )}
                     />
+                    {filteredClasses?.length === 0 && (
+                      <p className="text-xs text-orange-500 mt-1">
+                        {userRole === 'class_teacher' 
+                          ? "You are not assigned as a Class Teacher." 
+                          : "No classes available."}
+                      </p>
+                    )}
                     {form.formState.errors.class_id && (
                       <p className="text-xs text-destructive">{form.formState.errors.class_id.message}</p>
                     )}
@@ -148,7 +186,7 @@ export default function Timetable() {
                             <SelectValue placeholder="Select subject" />
                           </SelectTrigger>
                           <SelectContent>
-                            {subjects?.map((sub: any) => (
+                            {filteredSubjects?.map((sub: any) => (
                               <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>
                             ))}
                           </SelectContent>

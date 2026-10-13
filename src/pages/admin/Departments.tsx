@@ -41,6 +41,11 @@ export default function Departments() {
   const [isClassDialogOpen, setIsClassDialogOpen] = useState(false)
   const [activeDeptForClass, setActiveDeptForClass] = useState<string>('')
 
+  // Quick Assign Class Teacher State
+  const [assignTeacherModalOpen, setAssignTeacherModalOpen] = useState(false)
+  const [targetClassForTeacher, setTargetClassForTeacher] = useState<any>(null)
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('none')
+
   const queryClient = useQueryClient()
   const { data: departments, isLoading: isDeptLoading } = useDepartments()
   const { data: colleges } = useColleges()
@@ -60,10 +65,36 @@ export default function Departments() {
   const facultyList = useMemo(() => {
     if (!users) return []
     return users.filter((u: any) => 
-      (u.role === 'faculty' || u.role === 'class_teacher') && 
-      u.departments?.name // Ensure they have a department
+      (u.role === 'faculty' || u.role === 'class_teacher')
     )
   }, [users])
+
+  const assignTeacherMutation = useMutation({
+    mutationFn: async ({ classId, teacherId }: { classId: string, teacherId: string | null }) => {
+      const resolvedTeacherId = teacherId === 'none' ? null : teacherId
+      const { error } = await supabase
+        .from('classes')
+        .update({ class_teacher_id: resolvedTeacherId })
+        .eq('id', classId)
+      if (error) throw error
+
+      if (resolvedTeacherId) {
+        await supabase
+          .from('users')
+          .update({ role: 'class_teacher' })
+          .eq('id', resolvedTeacherId)
+          .eq('role', 'faculty')
+      }
+    },
+    onSuccess: () => {
+      toast.success('Class teacher assigned successfully!')
+      queryClient.invalidateQueries({ queryKey: ['classes'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['user-hierarchy'] })
+      setAssignTeacherModalOpen(false)
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to assign class teacher')
+  })
 
   const createDepartmentMutation = useMutation({
     mutationFn: async (values: DepartmentFormValues) => {
@@ -264,7 +295,7 @@ export default function Departments() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">-- Unassigned --</SelectItem>
-                        {facultyList.filter((f: any) => f.departments?.name && f.departments.id === activeDeptForClass).map((faculty: any) => (
+                        {facultyList.filter((f: any) => f.department_id === activeDeptForClass).map((faculty: any) => (
                           <SelectItem key={faculty.id} value={faculty.id}>
                             {faculty.first_name} {faculty.last_name} ({faculty.email})
                           </SelectItem>
@@ -283,6 +314,44 @@ export default function Departments() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* QUICK ASSIGN CLASS TEACHER MODAL */}
+      <Dialog open={assignTeacherModalOpen} onOpenChange={setAssignTeacherModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Assign Class Teacher</DialogTitle>
+            <DialogDescription>
+              Assign a faculty member as the Class Teacher for {targetClassForTeacher?.name} (Division {targetClassForTeacher?.division}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <Label>Select Teacher</Label>
+            <Select onValueChange={setSelectedTeacherId} value={selectedTeacherId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select faculty" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">-- Unassign Class Teacher --</SelectItem>
+                {facultyList.filter((f: any) => !targetClassForTeacher?.department_id || !f.department_id || f.department_id === targetClassForTeacher.department_id).map((faculty: any) => (
+                  <SelectItem key={faculty.id} value={faculty.id}>
+                    {faculty.first_name} {faculty.last_name} ({faculty.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignTeacherModalOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => assignTeacherMutation.mutate({ classId: targetClassForTeacher?.id, teacherId: selectedTeacherId })}
+              disabled={assignTeacherMutation.isPending}
+            >
+              {assignTeacherMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Assignment
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -383,9 +452,23 @@ export default function Departments() {
                                   <h5 className="font-semibold text-slate-900 dark:text-white pr-6">{cls.name}</h5>
                                   <p className="text-xs text-slate-500 mb-2">Semester {cls.semester}</p>
                                   
-                                  <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                                    <UsersIcon size={12} className="text-indigo-500" />
-                                    {teacher ? `${teacher.first_name} ${teacher.last_name}` : <span className="text-amber-500 italic">No Teacher Assigned</span>}
+                                  <div className="flex items-center justify-between gap-1 text-xs text-slate-600 dark:text-slate-400">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <UsersIcon size={12} className="text-indigo-500 shrink-0" />
+                                      <span className="truncate">{teacher ? `${teacher.first_name} ${teacher.last_name}` : <span className="text-amber-500 italic">No Teacher Assigned</span>}</span>
+                                    </div>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      className="h-6 px-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 shrink-0 font-medium"
+                                      onClick={() => {
+                                        setTargetClassForTeacher(cls)
+                                        setSelectedTeacherId(cls.class_teacher_id || 'none')
+                                        setAssignTeacherModalOpen(true)
+                                      }}
+                                    >
+                                      {teacher ? 'Change' : 'Assign'}
+                                    </Button>
                                   </div>
 
                                   <Button

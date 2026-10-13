@@ -47,11 +47,11 @@ export default function Students() {
     }
     
     if (userRole === 'principal') {
-      return filtered.filter(c => c.departments?.college_id === userCollegeId)
+      return userCollegeId ? filtered.filter(c => c.departments?.college_id === userCollegeId) : filtered
     }
     
     if (userRole === 'hod' || userRole === 'faculty') {
-      return filtered.filter(c => c.department_id === userDepartmentId)
+      return userDepartmentId ? filtered.filter(c => c.department_id === userDepartmentId) : filtered
     }
 
     // RBAC: Class Teachers only see their own explicitly assigned classes
@@ -59,7 +59,7 @@ export default function Students() {
       return filtered.filter(c => c.class_teacher_id === user?.id)
     }
     
-    return []
+    return filtered
   }, [classes, userDepartmentId, userCollegeId, userRole, user])
 
   const students = useMemo(() => {
@@ -67,15 +67,31 @@ export default function Students() {
     return users
       .filter((u: any) => u.role === 'student')
       .filter((u: any) => {
+        // RBAC: Class Teachers ONLY see students enrolled in their assigned classes
+        if (userRole === 'class_teacher') {
+          const isMyStudent = u.enrollments?.some((e: any) => e.classes?.class_teacher_id === user?.id)
+          if (!isMyStudent) return false
+        }
+        return true
+      })
+      .filter((u: any) => {
         if (!searchQuery) return true
         const q = searchQuery.toLowerCase()
+        const rollStr = u.enrollments?.[0]?.roll_number?.toLowerCase() || ''
         return (
           u.first_name?.toLowerCase().includes(q) ||
           u.last_name?.toLowerCase().includes(q) ||
-          u.email?.toLowerCase().includes(q)
+          u.email?.toLowerCase().includes(q) ||
+          rollStr.includes(q)
         )
       })
-  }, [users, searchQuery])
+      // Sort by roll number if available
+      .sort((a: any, b: any) => {
+        const r1 = a.enrollments?.[0]?.roll_number || 'ZZZ'
+        const r2 = b.enrollments?.[0]?.roll_number || 'ZZZ'
+        return r1.localeCompare(r2)
+      })
+  }, [users, searchQuery, userRole, user])
 
   const addForm = useForm<AddStudentFormValues>({
     resolver: zodResolver(addStudentSchema),
@@ -85,12 +101,15 @@ export default function Students() {
   // MUTATION: Add Single Student
   const addStudentMutation = useMutation({
     mutationFn: async (values: AddStudentFormValues) => {
-      // 1. Stage the student registration or claim the auth user instantly
+      const targetClass = classes?.find((c: any) => c.id === values.class_id)
+      const collegeId = userCollegeId || targetClass?.departments?.college_id || null
+      const deptId = userDepartmentId || targetClass?.department_id || null
+
       const { data: inviteData, error: inviteError } = await supabase.rpc('invite_or_claim_user', {
         p_email: values.email,
         p_role: 'student',
-        p_college_id: userCollegeId,
-        p_department_id: userDepartmentId,
+        p_college_id: collegeId,
+        p_department_id: deptId,
         p_first_name: values.first_name,
         p_last_name: values.last_name,
         p_class_id: values.class_id,
@@ -98,8 +117,6 @@ export default function Students() {
       })
       if (inviteError) throw inviteError
 
-      // The new custom RPC handles EVERYTHING. 
-      // If they are claimed, it enrolled them. If staged, it stored class_id for auto-enrollment later!
       return inviteData
     },
     onSuccess: (data: any) => {
@@ -132,6 +149,10 @@ export default function Students() {
       let successCount = 0
       let failCount = 0
 
+      const targetClass = classes?.find((c: any) => c.id === selectedImportClass)
+      const collegeId = userCollegeId || targetClass?.departments?.college_id || null
+      const deptId = userDepartmentId || targetClass?.department_id || null
+
       // Process sequentially to avoid hammering the DB
       for (let i = 0; i < rows.length; i++) {
         // Skip header if it contains 'email'
@@ -147,11 +168,11 @@ export default function Students() {
         if (!email || !roll_number) continue;
 
         try {
-          const { data: inviteData, error: inviteError } = await supabase.rpc('invite_or_claim_user', {
+          const { error: inviteError } = await supabase.rpc('invite_or_claim_user', {
             p_email: email,
             p_role: 'student',
-            p_college_id: userCollegeId,
-            p_department_id: userDepartmentId,
+            p_college_id: collegeId,
+            p_department_id: deptId,
             p_first_name: first_name,
             p_last_name: last_name,
             p_class_id: selectedImportClass,
@@ -440,7 +461,7 @@ export default function Students() {
               <tr>
                 <th className="px-6 py-4 font-medium">Student</th>
                 <th className="px-6 py-4 font-medium">Contact</th>
-                <th className="px-6 py-4 font-medium">Department</th>
+                <th className="px-6 py-4 font-medium">Class / Dept</th>
                 <th className="px-6 py-4 font-medium">Joined</th>
               </tr>
             </thead>
@@ -480,9 +501,20 @@ export default function Students() {
                       {student.email}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium">
-                        {student.departments?.name || 'Unassigned'}
-                      </span>
+                      {student.enrollments?.[0] ? (
+                        <div className="flex flex-col">
+                          <span className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-100 dark:border-indigo-800">
+                            {student.enrollments[0].classes?.name} (Sem {student.enrollments[0].classes?.semester})
+                          </span>
+                          <span className="text-xs text-slate-500 mt-1 font-mono">
+                            Roll: {student.enrollments[0].roll_number}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium">
+                          {student.departments?.name || 'Unassigned'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-slate-500">
                       {new Date(student.created_at).toLocaleDateString()}

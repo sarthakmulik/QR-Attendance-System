@@ -41,7 +41,7 @@ export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewPr
     const classTeachersWithStudents = classTeachers.map((ct: any) => {
       const assignedClasses = classes.filter((c: any) => c.class_teacher_id === ct.id)
       const myStudents = assignedClasses.flatMap((c: any) => studentsByClass.get(c.id) || [])
-      return { ...ct, assignedClasses, students: myStudents }
+      return { ...ct, class_id: assignedClasses[0]?.id, assignedClasses, students: myStudents }
     })
 
     // 4. Link Faculties to Students (via Timetable -> Class)

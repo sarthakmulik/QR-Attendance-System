@@ -23,7 +23,12 @@ export default function Lectures() {
   const { data: subjects, isLoading: isLoadingSubjects } = useSubjects()
   const { data: activeSessions } = useActiveSessions()
 
-  const myActiveSessions = activeSessions?.filter((s: any) => s.faculty_id === user?.id) || []
+  const myActiveSessions = activeSessions?.filter((s: any) => {
+    if (s.faculty_id !== user?.id) return false
+    // Hide ghost sessions that have passed their expiration time
+    if (s.expires_at && new Date(s.expires_at) < new Date()) return false
+    return true
+  }) || []
 
   const today = new Date().getDay()
   const activeDay = today === 0 ? 7 : today

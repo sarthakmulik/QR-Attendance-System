@@ -106,7 +106,7 @@ export default function Students() {
       const deptId = userDepartmentId || targetClass?.department_id || null
 
       const { data: inviteData, error: inviteError } = await supabase.rpc('invite_or_claim_user', {
-        p_email: values.email,
+        p_email: values.email.trim().toLowerCase(),
         p_role: 'student',
         p_college_id: collegeId,
         p_department_id: deptId,
@@ -169,7 +169,7 @@ export default function Students() {
 
         try {
           const { error: inviteError } = await supabase.rpc('invite_or_claim_user', {
-            p_email: email,
+            p_email: email.trim().toLowerCase(),
             p_role: 'student',
             p_college_id: collegeId,
             p_department_id: deptId,

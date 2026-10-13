@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,7 +26,7 @@ export default function Login() {
     setErrorMsg('')
     
     const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
+    const email = (formData.get('email') as string).trim().toLowerCase()
     const password = formData.get('password') as string
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -97,7 +97,12 @@ export default function Login() {
           </form>
           
           <div className="mt-8 text-center text-sm text-slate-500">
-            <p>Don't have an account? <a href="#" className="font-medium text-slate-900 hover:underline">Contact Administrator</a></p>
+            <p>
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-medium text-slate-900 hover:underline">
+                Sign up with your invited email
+              </Link>
+            </p>
           </div>
         </CardContent>
       </Card>

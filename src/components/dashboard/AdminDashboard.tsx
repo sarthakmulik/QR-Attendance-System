@@ -8,10 +8,10 @@ export default function AdminDashboard() {
   const { data: defaulters, isLoading: defaultersLoading } = useLowAttendanceReport(75)
 
   const stats = [
-    { title: "Total Students", value: statsData?.total_students || 0, icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
-    { title: "Active Classes", value: statsData?.active_classes || 0, icon: BookOpen, color: "text-indigo-600", bg: "bg-indigo-100" },
-    { title: "Today's Attendance", value: `${statsData?.today_attendance_pct || 0}%`, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-100" },
-    { title: "At Risk (<75%)", value: statsData?.low_attendance_count || 0, icon: AlertTriangle, color: "text-rose-600", bg: "bg-rose-100" }
+    { title: "Total Students", value: statsData?.totalStudents ?? statsData?.total_students ?? 0, icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
+    { title: "Active Classes", value: statsData?.activeClasses ?? statsData?.active_classes ?? 0, icon: BookOpen, color: "text-indigo-600", bg: "bg-indigo-100" },
+    { title: "Today's Attendance", value: `${statsData?.todayAttendancePct ?? statsData?.today_attendance_pct ?? 0}%`, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-100" },
+    { title: "At Risk (<75%)", value: statsData?.lowAttendanceCount ?? statsData?.low_attendance_count ?? 0, icon: AlertTriangle, color: "text-rose-600", bg: "bg-rose-100" }
   ]
 
   return (
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
                     {defaulters.map((d: any) => (
                       <tr key={d.student_id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                         <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
-                          {d.users?.first_name} {d.users?.last_name}
+                          {d.first_name || d.users?.first_name} {d.last_name || d.users?.last_name}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700">

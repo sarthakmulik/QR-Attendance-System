@@ -8,6 +8,7 @@ import { useTimetable, useClasses, useSubjects, useActiveSessions } from '@/hook
 import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { computeSessionToken, createSessionSecret, currentTokenWindow } from '@/lib/sessionToken'
 
 export default function Lectures() {
   const { user } = useAuth()
@@ -38,20 +39,38 @@ export default function Lectures() {
 
   const startSessionMutation = useMutation({
     mutationFn: async (payload: { timetableId?: string, classId?: string, subjectId?: string, duration: number }) => {
-      const expiresAt = new Date(Date.now() + payload.duration * 60000).toISOString()
+      const now = Date.now()
+      const expiresAt = new Date(now + payload.duration * 60000).toISOString()
+      const sessionSecret = createSessionSecret()
+      const window = currentTokenWindow(now)
+      const currentToken = await computeSessionToken(sessionSecret, window)
+      const tokenExpiresAt = new Date((window + 1) * 10 * 1000).toISOString()
 
-      const { data, error } = await supabase
+      const row: Record<string, unknown> = {
+        timetable_id: payload.timetableId || null,
+        class_id: payload.classId || null,
+        subject_id: payload.subjectId || null,
+        faculty_id: user?.id,
+        expires_at: expiresAt,
+        is_active: true,
+        current_token: currentToken,
+        token_expires_at: tokenExpiresAt,
+        session_secret: sessionSecret,
+      }
+
+      let { data, error } = await supabase
         .from('attendance_sessions')
-        .insert({
-          timetable_id: payload.timetableId || null,
-          class_id: payload.classId || null,
-          subject_id: payload.subjectId || null,
-          faculty_id: user?.id,
-          expires_at: expiresAt,
-          is_active: true
-        })
+        .insert(row)
         .select()
         .single()
+
+      // Older databases may not have session_secret yet; still satisfy current_token NOT NULL.
+      if (error && /session_secret/i.test(error.message)) {
+        delete row.session_secret
+        const retry = await supabase.from('attendance_sessions').insert(row).select().single()
+        data = retry.data
+        error = retry.error
+      }
 
       if (error) throw error
       return data
@@ -122,7 +141,12 @@ export default function Lectures() {
               </div>
               
               <Button 
-                onClick={() => startSessionMutation.mutate({ timetableId: lecture.id, duration: sessionDuration })}
+                onClick={() => startSessionMutation.mutate({ 
+                  timetableId: lecture.id, 
+                  classId: lecture.class_id, 
+                  subjectId: lecture.subject_id, 
+                  duration: sessionDuration 
+                })}
                 disabled={startSessionMutation.isPending}
                 className="gap-2 bg-green-600 hover:bg-green-700"
               >

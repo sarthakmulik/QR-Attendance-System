@@ -23,7 +23,7 @@ export default function LiveSession() {
     const fetchSessionData = async () => {
       const { data } = await supabase
         .from('attendance_sessions')
-        .select('session_secret, expires_at')
+        .select('session_secret, expires_at, current_token')
         .eq('id', sessionId)
         .single()
       if (data) {
@@ -35,7 +35,11 @@ export default function LiveSession() {
 
   // Local TOTP Rotation Logic (Zero Network Requests Required)
   useEffect(() => {
-    if (!sessionData?.session_secret) return
+    if (!sessionData) return
+    if (!sessionData.session_secret) {
+      if (sessionData.current_token) setToken(sessionData.current_token)
+      return
+    }
 
     const rotateToken = async () => {
       const now = new Date()
@@ -70,6 +74,21 @@ export default function LiveSession() {
 
     return () => clearInterval(rotationInterval)
   }, [sessionData, navigate])
+
+  // Keep current_token in sync so existing mark_attendance RPCs still accept scans
+  useEffect(() => {
+    if (!sessionId || !token) return
+    supabase
+      .from('attendance_sessions')
+      .update({
+        current_token: token,
+        token_expires_at: new Date(Date.now() + 15000).toISOString(),
+      })
+      .eq('id', sessionId)
+      .then(({ error }) => {
+        if (error) console.error('Failed to rotate session token', error)
+      })
+  }, [sessionId, token])
 
   const endSession = async () => {
     setIsEnding(true)

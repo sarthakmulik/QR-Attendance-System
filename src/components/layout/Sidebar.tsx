@@ -17,11 +17,11 @@ export default function Sidebar({ isMobileOpen = false, setIsMobileOpen }: Sideb
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'principal', 'hod', 'class_teacher', 'faculty', 'student'] },
     { name: 'Colleges', href: '/colleges', icon: Building2, roles: ['super_admin'] },
-    { name: 'Departments', href: '/departments', icon: Building, roles: ['super_admin', 'principal'] },
+    { name: 'Departments & Classes', href: '/departments', icon: Building, roles: ['super_admin', 'principal', 'hod'] },
     { name: 'Users', href: '/users', icon: Users, roles: ['super_admin', 'principal', 'hod'] },
     { name: 'Subjects', href: '/subjects', icon: BookOpen, roles: ['super_admin', 'principal', 'hod'] },
     { name: 'Master Timetable', href: '/timetable', icon: Calendar, roles: ['super_admin', 'principal', 'hod', 'class_teacher'] },
-    { name: 'My Lectures', href: '/faculty/lectures', icon: Clock, roles: ['class_teacher', 'faculty', 'super_admin'] },
+    { name: 'My Lectures', href: '/faculty/lectures', icon: Clock, roles: ['super_admin', 'hod', 'class_teacher', 'faculty'] },
     { name: 'Reports', href: '/faculty/reports', icon: FileSpreadsheet, roles: ['super_admin', 'principal', 'hod', 'class_teacher', 'faculty'] },
     { name: 'Students', href: '/students', icon: GraduationCap, roles: ['super_admin', 'principal', 'hod', 'class_teacher'] },
     { name: 'Scan QR', href: '/student/scan', icon: QrCode, roles: ['student', 'super_admin'] },

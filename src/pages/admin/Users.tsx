@@ -102,7 +102,7 @@ export default function Users() {
     mutationFn: async (values: UserFormValues) => {
       // Use the secure RPC which handles both claiming existing users and pre-registering new ones seamlessly
       const { data, error } = await supabase.rpc('invite_or_claim_user', {
-        p_email: values.email,
+        p_email: values.email.trim().toLowerCase(),
         p_role: values.role,
         p_college_id: userRole === 'super_admin' ? (values.college_id || null) : userCollegeId,
         p_department_id: (userRole === 'super_admin' || userRole === 'principal') ? (values.department_id || null) : userDepartmentId,
@@ -116,7 +116,7 @@ export default function Users() {
     },
     onSuccess: (data: any) => {
       if (data?.status === 'staged') {
-        toast.success('User pre-registered successfully! Their role will be assigned automatically when they sign up.')
+        toast.success('User pre-registered. Ask them to open Sign up on the login page with this email so their role is assigned.')
       } else {
         toast.success('User added and updated successfully!')
       }
@@ -136,7 +136,7 @@ export default function Users() {
       const targetCollegeId = userRole === 'super_admin' ? null : (editingUser?.college_id || userCollegeId || selectedClass?.departments?.college_id || null)
 
       const { data, error } = await supabase.rpc('invite_or_claim_user', {
-        p_email: values.email,
+        p_email: values.email.trim().toLowerCase(),
         p_role: values.role,
         p_college_id: targetCollegeId,
         p_department_id: targetDeptId,

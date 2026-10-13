@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Download, AlertTriangle, FileSpreadsheet, Loader2, Users, CheckCircle2, UserX } from 'lucide-react'
 import { useLowAttendanceReport, useFacultyAudit } from '@/hooks/queries'
 import { useAuth } from '@/context/AuthContext'
+import { toast } from 'sonner'
 
 export default function Reports() {
   const { userRole } = useAuth()
@@ -17,8 +18,41 @@ export default function Reports() {
   const canViewFacultyAudit = ['super_admin', 'principal', 'hod', 'dept_admin'].includes(userRole || '')
 
   const handleExport = () => {
-    // Simulated export
-    alert(`Exporting ${defaulters?.length || 0} records to CSV...`)
+    if (activeTab === 'students') {
+      if (!defaulters || defaulters.length === 0) {
+        toast.info("No defaulter records to export.")
+        return
+      }
+      const headers = "Student Name,Email,Classes Attended,Classes Held,Attendance Percentage\n"
+      const rows = defaulters.map((s: any) => 
+        `"${s.first_name} ${s.last_name}","${s.email || ''}",${s.attended_sessions || 0},${s.total_sessions || 0},${s.attendance_percentage}%`
+      ).join("\n")
+      const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `student_defaulters_${threshold}pct_${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Student defaulters report exported successfully!")
+    } else {
+      if (!facultyAudit || facultyAudit.length === 0) {
+        toast.info("No faculty audit records to export.")
+        return
+      }
+      const headers = "Date,Faculty Name,Subject,Class,Time,Status\n"
+      const rows = facultyAudit.map((a: any) => 
+        `"${new Date(a.lecture_date).toLocaleDateString()}","${a.first_name} ${a.last_name}","${a.subject_name}","${a.class_name}","${a.start_time?.substring(0,5)} - ${a.end_time?.substring(0,5)}","${a.status}"`
+      ).join("\n")
+      const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `faculty_audit_30d_${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Faculty compliance report exported successfully!")
+    }
   }
 
   return (

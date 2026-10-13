@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,7 @@ export default function Settings() {
   // Simulated preferences
   const [emailNotifs, setEmailNotifs] = useState(true)
   const [smsNotifs, setSmsNotifs] = useState(false)
-  const [darkMode, setDarkMode] = useState(true) // Assume true if using dark mode default
+  const [darkMode, setDarkMode] = useState(true)
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -36,6 +36,24 @@ export default function Settings() {
       last_name: user?.user_metadata?.last_name || '',
     },
   })
+
+  useEffect(() => {
+    if (!user) return
+    const fetchUser = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single()
+      if (data) {
+        form.reset({
+          first_name: data.first_name || user?.user_metadata?.first_name || '',
+          last_name: data.last_name || user?.user_metadata?.last_name || '',
+        })
+      }
+    }
+    fetchUser()
+  }, [user])
 
   const updateProfileMutation = useMutation({
     mutationFn: async (values: ProfileFormValues) => {

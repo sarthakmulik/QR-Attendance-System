@@ -45,24 +45,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string, attempt = 0) => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('role, college_id, department_id')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
       
       if (!error && data) {
         setUserRole(data.role)
         setUserCollegeId(data.college_id)
         setUserDepartmentId(data.department_id)
+        setLoading(false)
+        return
+      }
+
+      // New signups can race the auth trigger that writes public.users
+      if (attempt < 6) {
+        setTimeout(() => fetchUserData(userId, attempt + 1), 400)
+        return
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
-    } finally {
-      setLoading(false)
+      if (attempt < 6) {
+        setTimeout(() => fetchUserData(userId, attempt + 1), 400)
+        return
+      }
     }
+    setLoading(false)
   }
 
   const signOut = async () => {

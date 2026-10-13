@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { AuthProvider } from './context/AuthContext'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import DashboardLayout from './components/layout/DashboardLayout'
 import Dashboard from './pages/Dashboard'
@@ -36,6 +37,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             <Route path="/display/:classId/:token" element={<ProjectorDisplay />} />
             
             {/* Protected Routes */}
@@ -56,6 +58,7 @@ function App() {
               
                 {/* Student Routes */}
                 <Route path="/student/scan" element={<Scanner />} />
+                <Route path="/settings" element={<Settings />} />
               
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
               </Route>

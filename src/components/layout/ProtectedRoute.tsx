@@ -1,9 +1,10 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Loader2 } from 'lucide-react'
+import RolePending from './RolePending'
 
 export default function ProtectedRoute() {
-  const { session, loading } = useAuth()
+  const { session, loading, rolePending } = useAuth()
 
   if (loading) {
     return (
@@ -16,6 +17,10 @@ export default function ProtectedRoute() {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  if (rolePending) {
+    return <RolePending />
   }
 
   return <Outlet />

@@ -12,6 +12,9 @@ export default function Scanner() {
   
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const isComponentMounted = useRef(true)
+  // Ref (not state) so the 10fps QR callback sees the guard immediately,
+  // before any re-render — prevents duplicate mark_attendance RPC calls.
+  const isProcessingRef = useRef(false)
 
   useEffect(() => {
     isComponentMounted.current = true
@@ -72,10 +75,17 @@ export default function Scanner() {
     }
   }
 
+  const resetProcessing = () => {
+    isProcessingRef.current = false
+    if (isComponentMounted.current) {
+      setIsProcessing(false)
+    }
+  }
+
   const onScanSuccess = async (decodedText: string) => {
     try {
-      if (isProcessing) return
-      
+      if (isProcessingRef.current) return
+      isProcessingRef.current = true
       setIsProcessing(true)
       await stopScanner() // Stop camera immediately to freeze frame and save battery
 
@@ -125,9 +135,7 @@ export default function Scanner() {
             })
           }
         } finally {
-          if (isComponentMounted.current) {
-            setIsProcessing(false)
-          }
+          resetProcessing()
         }
       }
 
@@ -142,8 +150,8 @@ export default function Scanner() {
                   success: false,
                   message: "GPS accuracy is too low. Please step outside or connect to Wi-Fi to improve location accuracy."
                 })
-                setIsProcessing(false)
               }
+              resetProcessing()
               return
             }
             executeMarkAttendance(position.coords.latitude, position.coords.longitude)
@@ -159,8 +167,8 @@ export default function Scanner() {
                 success: false,
                 message: errorMsg
               })
-              setIsProcessing(false)
             }
+            resetProcessing()
           },
           // Force high accuracy
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -171,8 +179,8 @@ export default function Scanner() {
             success: false,
             message: "Geolocation is not supported by your browser."
           })
-          setIsProcessing(false)
         }
+        resetProcessing()
       }
 
     } catch (err: any) {
@@ -181,8 +189,8 @@ export default function Scanner() {
           success: false,
           message: err.message || "Failed to process QR code. Please try again."
         })
-        setIsProcessing(false)
       }
+      resetProcessing()
     }
   }
 

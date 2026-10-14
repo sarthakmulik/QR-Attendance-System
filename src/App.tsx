@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ProtectedRoute from './components/layout/ProtectedRoute'
+import RoleRoute from './components/layout/RoleRoute'
 import DashboardLayout from './components/layout/DashboardLayout'
 import Dashboard from './pages/Dashboard'
 import Colleges from './pages/admin/Colleges'
@@ -44,22 +45,37 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/colleges" element={<Colleges />} />
-                <Route path="/departments" element={<Departments />} />
-                <Route path="/users" element={<Users />} />
-                <Route path="/subjects" element={<Subjects />} />
-                <Route path="/timetable" element={<Timetable />} />
-                <Route path="/students" element={<Students />} />
-              
+
+                {/* Admin Routes (role-gated; DB RLS remains the real enforcement layer) */}
+                <Route element={<RoleRoute roles={['super_admin']} />}>
+                  <Route path="/colleges" element={<Colleges />} />
+                </Route>
+                <Route element={<RoleRoute roles={['super_admin', 'principal', 'hod']} />}>
+                  <Route path="/departments" element={<Departments />} />
+                  <Route path="/users" element={<Users />} />
+                  <Route path="/subjects" element={<Subjects />} />
+                </Route>
+                <Route element={<RoleRoute roles={['super_admin', 'principal', 'hod', 'class_teacher']} />}>
+                  <Route path="/timetable" element={<Timetable />} />
+                  <Route path="/students" element={<Students />} />
+                </Route>
+
                 {/* Faculty Routes */}
-                <Route path="/faculty/lectures" element={<Lectures />} />
-                <Route path="/faculty/live-session/:sessionId" element={<LiveSession />} />
-                <Route path="/faculty/reports" element={<Reports />} />
-              
+                <Route element={<RoleRoute roles={['super_admin', 'hod', 'class_teacher', 'faculty']} />}>
+                  <Route path="/faculty/lectures" element={<Lectures />} />
+                  <Route path="/faculty/live-session/:sessionId" element={<LiveSession />} />
+                </Route>
+                <Route element={<RoleRoute roles={['super_admin', 'principal', 'hod', 'class_teacher', 'faculty']} />}>
+                  <Route path="/faculty/reports" element={<Reports />} />
+                </Route>
+
                 {/* Student Routes */}
-                <Route path="/student/scan" element={<Scanner />} />
+                <Route element={<RoleRoute roles={['student', 'super_admin']} />}>
+                  <Route path="/student/scan" element={<Scanner />} />
+                </Route>
+
                 <Route path="/settings" element={<Settings />} />
-              
+
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Route>

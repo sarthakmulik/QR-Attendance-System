@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { computeSessionToken, createSessionSecret, currentTokenWindow } from '@/lib/sessionToken'
 
 export default function Lectures() {
-  const { user } = useAuth()
+  const { user, userRole } = useAuth()
   const navigate = useNavigate()
   
   const [activeTab, setActiveTab] = useState<'my' | 'dept' | 'adhoc'>('my')
@@ -35,7 +35,32 @@ export default function Lectures() {
   const activeDay = today === 0 ? 7 : today
 
   const myLectures = timetable?.filter((t: any) => t.faculty_id === user?.id && t.day_of_week === activeDay) || []
-  const otherLectures = timetable?.filter((t: any) => t.faculty_id !== user?.id && t.day_of_week === activeDay) || []
+
+  // The DB only lets faculty start sessions for divisions/subjects they
+  // actually teach (INSERT RLS policy on attendance_sessions). Mirror that
+  // rule in the UI so no start button is offered that would fail server-side.
+  const isManagement = userRole === 'super_admin' || userRole === 'principal' || userRole === 'hod'
+  const teachesClassOrSubject = (classId?: string | null, subjectId?: string | null) => {
+    if (isManagement) return true
+    return (timetable || []).some(
+      (t: any) =>
+        t.faculty_id === user?.id &&
+        ((classId && t.class_id === classId) || (subjectId && t.subject_id === subjectId))
+    )
+  }
+  const otherLectures =
+    timetable?.filter(
+      (t: any) =>
+        t.faculty_id !== user?.id &&
+        t.day_of_week === activeDay &&
+        teachesClassOrSubject(t.class_id, t.subject_id)
+    ) || []
+  const teachableClasses = (classes || []).filter(
+    (c: any) =>
+      isManagement ||
+      c.class_teacher_id === user?.id ||
+      (timetable || []).some((t: any) => t.faculty_id === user?.id && t.class_id === c.id)
+  )
 
   const startSessionMutation = useMutation({
     mutationFn: async (payload: { timetableId?: string, classId?: string, subjectId?: string, duration: number }) => {
@@ -265,7 +290,7 @@ export default function Lectures() {
                   onChange={e => setSelectedClassId(e.target.value)}
                 >
                   <option value="">Select a class...</option>
-                  {classes?.map((c: any) => (
+                  {teachableClasses.map((c: any) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>

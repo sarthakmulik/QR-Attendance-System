@@ -15,7 +15,18 @@ export default function Reports() {
   const { data: defaulters, isLoading } = useLowAttendanceReport(parseInt(threshold))
   const { data: facultyAudit, isLoading: isLoadingAudit } = useFacultyAudit()
 
-  const canViewFacultyAudit = ['super_admin', 'principal', 'hod', 'dept_admin'].includes(userRole || '')
+  const canViewFacultyAudit = ['super_admin', 'principal', 'hod'].includes(userRole || '')
+
+  // Escape a value for safe CSV output: quotes doubled, and formula-triggering
+  // leading characters (=, +, -, @, tab, CR) prefixed with an apostrophe to
+  // prevent spreadsheet formula injection.
+  const csvCell = (value: unknown): string => {
+    let s = value == null ? '' : String(value)
+    if (/^[=+\-@\t\r]/.test(s)) {
+      s = `'${s}`
+    }
+    return `"${s.replace(/"/g, '""')}"`
+  }
 
   const handleExport = () => {
     if (activeTab === 'students') {
@@ -25,7 +36,7 @@ export default function Reports() {
       }
       const headers = "Student Name,Email,Classes Attended,Classes Held,Attendance Percentage\n"
       const rows = defaulters.map((s: any) => 
-        `"${s.first_name} ${s.last_name}","${s.email || ''}",${s.attended_sessions || 0},${s.total_sessions || 0},${s.attendance_percentage}%`
+        `${csvCell(`${s.first_name} ${s.last_name}`)},${csvCell(s.email)},${s.attended_sessions || 0},${s.total_sessions || 0},${s.attendance_percentage}%`
       ).join("\n")
       const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
@@ -42,7 +53,7 @@ export default function Reports() {
       }
       const headers = "Date,Faculty Name,Subject,Class,Time,Status\n"
       const rows = facultyAudit.map((a: any) => 
-        `"${new Date(a.lecture_date).toLocaleDateString()}","${a.first_name} ${a.last_name}","${a.subject_name}","${a.class_name}","${a.start_time?.substring(0,5)} - ${a.end_time?.substring(0,5)}","${a.status}"`
+        `${csvCell(new Date(a.lecture_date).toLocaleDateString())},${csvCell(`${a.first_name} ${a.last_name}`)},${csvCell(a.subject_name)},${csvCell(a.class_name)},${csvCell(`${a.start_time?.substring(0,5)} - ${a.end_time?.substring(0,5)}`)},${csvCell(a.status)}`
       ).join("\n")
       const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)

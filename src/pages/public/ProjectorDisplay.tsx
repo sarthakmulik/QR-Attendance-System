@@ -17,18 +17,21 @@ export default function ProjectorDisplay() {
   
   useEffect(() => {
     if (session?.session_secret) {
+      const sessionSecret: string = session.session_secret
+      const expiresAt: string | null = session.expires_at
+
       const rotateToken = async () => {
         const now = new Date()
         
         // Auto-end session if expires_at is reached
-        if (session.expires_at && now.getTime() > new Date(session.expires_at).getTime()) {
+        if (expiresAt && now.getTime() > new Date(expiresAt).getTime()) {
           setSession(null)
           return
         }
 
         const currentWindow = Math.floor(now.getTime() / 1000 / 10)
         
-        const msgBuffer = new TextEncoder().encode(session.session_secret + currentWindow.toString())
+        const msgBuffer = new TextEncoder().encode(sessionSecret + currentWindow.toString())
         const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
         const hashArray = Array.from(new Uint8Array(hashBuffer))
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
@@ -44,7 +47,9 @@ export default function ProjectorDisplay() {
       const interval = setInterval(rotateToken, 100) // Update very frequently for smooth progress bar
       return () => clearInterval(interval)
     }
-  }, [session])
+    // Depend on the secret/expiry values, not the session object identity,
+    // so 3s polling doesn't tear down and rebuild the rotation interval.
+  }, [session?.session_secret, session?.expires_at])
 
   const fetchCurrentSession = async () => {
     try {

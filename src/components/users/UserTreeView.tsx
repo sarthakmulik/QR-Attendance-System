@@ -82,7 +82,8 @@ export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewPr
 
   // Helpers to render User Row
   const renderUserRow = (user: any, indent: number = 0, extraInfo?: string) => (
-    <div className={`flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 rounded-lg transition-colors ml-${indent}`}>
+    // Static class map: Tailwind can't generate `ml-${indent}` dynamically
+    <div className={`flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 rounded-lg transition-colors ${indent === 1 ? 'ml-4' : indent === 2 ? 'ml-8' : ''}`}>
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
           {user.first_name?.[0] || 'U'}{user.last_name?.[0] || 'N'}

@@ -133,7 +133,12 @@ export default function Users() {
     mutationFn: async (values: EditRoleFormValues & { userId: string, email: string }) => {
       const selectedClass = classes?.find((c: any) => c.id === values.class_id)
       const targetDeptId = values.department_id || selectedClass?.department_id || (userRole === 'hod' ? userDepartmentId : editingUser?.department_id) || null
-      const targetCollegeId = userRole === 'super_admin' ? null : (editingUser?.college_id || userCollegeId || selectedClass?.departments?.college_id || null)
+      // Super admins may legitimately move a user between colleges; everyone
+      // else keeps the target's existing college when none is selected.
+      // (invite_or_claim_user also COALESCEs, so NULL can never wipe data.)
+      const targetCollegeId = userRole === 'super_admin'
+        ? (editingUser?.college_id || null)
+        : (editingUser?.college_id || userCollegeId || selectedClass?.departments?.college_id || null)
 
       const { data, error } = await supabase.rpc('invite_or_claim_user', {
         p_email: values.email.trim().toLowerCase(),

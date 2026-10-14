@@ -102,10 +102,12 @@ export function useActiveSessions() {
   return useQuery({
     queryKey: ['active-sessions'],
     queryFn: async () => {
+      // Explicit columns: never ship session_secret/current_token to the list
+      // view. LiveSession.tsx fetches the secret separately for the owner.
       const { data, error } = await supabase
         .from('attendance_sessions')
         .select(`
-          *,
+          id, timetable_id, class_id, subject_id, faculty_id, date, is_active, expires_at, created_at,
           timetable (
             start_time, end_time, room_number,
             classes ( name ),
@@ -162,11 +164,10 @@ export function useStudentStats(studentId: string | undefined) {
     queryKey: ['student-stats', studentId],
     queryFn: async () => {
       if (!studentId) return null
-      const { data, error } = await supabase
-        .from('student_attendance_stats')
-        .select('*')
-        .eq('student_id', studentId)
-        .maybeSingle()
+      // Authorized RPC (the materialized view is no longer client-readable)
+      const { data, error } = await supabase.rpc('get_student_attendance_stats', {
+        p_student_id: studentId,
+      })
       if (error) throw error
       return data
     },
@@ -179,12 +180,11 @@ export function useSubjectStats(studentId: string | undefined) {
     queryKey: ['subject-stats', studentId],
     queryFn: async () => {
       if (!studentId) return []
-      const { data, error } = await supabase
-        .from('subject_attendance_stats')
-        .select('*')
-        .eq('student_id', studentId)
+      const { data, error } = await supabase.rpc('get_subject_attendance_stats', {
+        p_student_id: studentId,
+      })
       if (error) throw error
-      return data
+      return data || []
     },
     enabled: !!studentId,
   })

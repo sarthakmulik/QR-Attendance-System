@@ -32,14 +32,14 @@ export default function Header({ toggleMobileMenu }: { toggleMobileMenu?: () => 
           <div className="text-right hidden md:block">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               {user?.user_metadata?.first_name 
-                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name ?? ''}`.trim()
                 : user?.email}
             </p>
             <p className="text-xs text-slate-500 capitalize">{userRole?.replace('_', ' ') || 'Student'}</p>
           </div>
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-blue-400 text-white flex items-center justify-center font-bold shadow-md uppercase">
             {user?.user_metadata?.first_name 
-              ? `${user.user_metadata.first_name[0]}${user.user_metadata.last_name[0]}`
+              ? `${user.user_metadata.first_name[0]}${user.user_metadata.last_name?.[0] ?? ''}`
               : user?.email?.[0]}
           </div>
         </div>

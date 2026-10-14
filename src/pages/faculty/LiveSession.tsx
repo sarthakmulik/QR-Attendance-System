@@ -21,14 +21,18 @@ export default function LiveSession() {
   useEffect(() => {
     if (!sessionId) return
     const fetchSessionData = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('attendance_sessions')
         .select('session_secret, expires_at, current_token')
         .eq('id', sessionId)
         .single()
-      if (data) {
-        setSessionData(data)
+      if (error || !data) {
+        // Session not found, expired, or not visible to this user
+        toast.error('This lecture session could not be found or has ended.')
+        navigate('/faculty/lectures')
+        return
       }
+      setSessionData(data)
     }
     fetchSessionData()
   }, [sessionId])
@@ -156,7 +160,7 @@ export default function LiveSession() {
                   level="H"
                   includeMargin={false}
                   imageSettings={{
-                    src: "/vite.svg", // Replace with app logo if available
+                    src: "/favicon.svg", // App logo (exists in public/)
                     x: undefined,
                     y: undefined,
                     height: 40,

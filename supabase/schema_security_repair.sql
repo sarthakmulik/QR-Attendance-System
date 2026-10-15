@@ -297,6 +297,42 @@ GRANT EXECUTE ON FUNCTION public.get_subject_attendance_stats(UUID) TO authentic
 -- 3) mark_attendance: role check + enrollment check + race-safe insert
 -- ---------------------------------------------------------------------------
 
+-- Normalize session_secret to TEXT. The live DB created it as uuid (the same
+-- out-of-repo change that made display_token uuid — the hotfix's
+-- "ADD COLUMN IF NOT EXISTS session_secret TEXT" was then a silent no-op),
+-- which crashes every text operation on it ("function length(uuid) does not
+-- exist"). Existing values convert to the dashed canonical form, which is
+-- exactly what PostgREST already returned to the frontend, so live QR token
+-- hashing stays consistent.
+ALTER TABLE public.attendance_sessions
+    ADD COLUMN IF NOT EXISTS session_secret TEXT;
+
+ALTER TABLE public.attendance_sessions
+    ALTER COLUMN session_secret DROP DEFAULT;
+
+ALTER TABLE public.attendance_sessions
+    ALTER COLUMN session_secret TYPE TEXT
+    USING session_secret::text;
+
+-- TOTP helper. The live DB only has a diverged overload of this function
+-- (call with TEXT args failed with "function compute_session_token(text,
+-- bigint) does not exist"), so (re)create the canonical TEXT version.
+--
+-- Uses pg_catalog's built-in sha256(bytea) rather than pgcrypto's digest():
+-- mark_attendance executes with SET search_path = public, where extension
+-- schemas are not visible ("function digest(text, unknown) does not exist").
+-- sha256 is core PostgreSQL (11+) and byte-for-byte identical to
+-- digest(data, 'sha256'). Byte-compatible with the frontend sessionToken.ts:
+-- SHA-256(secret || window) hex, first 8 chars.
+CREATE OR REPLACE FUNCTION public.compute_session_token(p_secret TEXT, p_window BIGINT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog
+AS $$
+  SELECT substring(encode(sha256(convert_to(p_secret || p_window::text, 'UTF8')), 'hex') FROM 1 FOR 8);
+$$;
+
 -- Defensive: the ON CONFLICT insert below requires
 -- UNIQUE(session_id, student_id). schema_phase4.sql created the table with
 -- that constraint; re-assert it in case the live DB diverged. The whole block
@@ -356,6 +392,7 @@ DECLARE
     v_class_lng FLOAT;
     v_distance FLOAT;
     v_window BIGINT;
+    v_secret TEXT;
     v_token_ok BOOLEAN := false;
     v_inserted BIGINT := 0;
 BEGIN
@@ -393,10 +430,14 @@ BEGIN
     -- Rotating QR token (TOTP window +/- 1 == ~30s validity)
     v_window := floor(extract(epoch FROM now()) / 10);
 
-    IF v_session.session_secret IS NOT NULL AND length(v_session.session_secret) > 0 THEN
-        IF p_token = public.compute_session_token(v_session.session_secret, v_window)
-           OR p_token = public.compute_session_token(v_session.session_secret, v_window - 1)
-           OR p_token = public.compute_session_token(v_session.session_secret, v_window + 1) THEN
+    -- ::text keeps this working whether the column is uuid (some deployments)
+    -- or text, and the frontend hashes the same string PostgREST returns.
+    v_secret := v_session.session_secret::text;
+
+    IF v_secret IS NOT NULL AND length(v_secret) > 0 THEN
+        IF p_token = public.compute_session_token(v_secret, v_window)
+           OR p_token = public.compute_session_token(v_secret, v_window - 1)
+           OR p_token = public.compute_session_token(v_secret, v_window + 1) THEN
             v_token_ok := true;
         END IF;
     END IF;
@@ -472,7 +513,7 @@ BEGIN
 
     RETURN json_build_object('success', true, 'message', 'Attendance marked successfully!');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- ---------------------------------------------------------------------------
 -- 5) invite_or_claim_user: preserve college/department on super-admin edits,
@@ -614,7 +655,7 @@ BEGIN
         RETURN json_build_object('status', 'staged', 'message', 'User data staged. Awaiting signup.');
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- ---------------------------------------------------------------------------
 -- 6) create_college_with_admin: stage 'principal' (the old 'dept_admin' role
@@ -654,7 +695,7 @@ BEGIN
     SELECT row_to_json(c) INTO result FROM public.colleges c WHERE id = new_college_id;
     RETURN result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- ---------------------------------------------------------------------------
 -- 7) role_assigned tracking:
@@ -726,7 +767,7 @@ BEGIN
 
     RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- Make sure the trigger wiring exists (same pattern as
 -- schema_production_hotfix.sql). Harmless no-op if it's already in place.

@@ -235,3 +235,55 @@ export function useFacultyAudit() {
     },
   })
 }
+
+// --- Quick Reports (schema_reports.sql) -----------------------------------
+// Server-side summaries: attendance_records/attendance_sessions are
+// RLS-locked, so aggregation happens in SECURITY DEFINER RPCs.
+// Pass `null` while the report is closed so we don't fetch all three on load.
+
+export type ReportRange = { from: string; to: string } | null
+
+export function useDepartmentSummary(range: ReportRange) {
+  return useQuery({
+    queryKey: ['department-summary', range?.from, range?.to],
+    enabled: !!range,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_department_attendance_summary', {
+        p_from: range!.from,
+        p_to: range!.to,
+      })
+      if (error) throw error
+      return data || []
+    },
+  })
+}
+
+export function useSubjectSummary(range: ReportRange) {
+  return useQuery({
+    queryKey: ['subject-summary', range?.from, range?.to],
+    enabled: !!range,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_subject_attendance_summary', {
+        p_from: range!.from,
+        p_to: range!.to,
+      })
+      if (error) throw error
+      return data || []
+    },
+  })
+}
+
+export function useMonthlyLog(range: ReportRange) {
+  return useQuery({
+    queryKey: ['monthly-log', range?.from, range?.to],
+    enabled: !!range,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_monthly_attendance_log', {
+        p_from: range!.from,
+        p_to: range!.to,
+      })
+      if (error) throw error
+      return data || []
+    },
+  })
+}

@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, MoreVertical, Users as UsersIcon, Loader2, UserPlus } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+import { Loader2, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,9 +11,8 @@ import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
-import { useUserHierarchy, useColleges, useDepartments, useClasses } from '@/hooks/queries'
+import { useUserHierarchy, useColleges, useDepartments, useClasses, useStudentStats, useSubjectStats } from '@/hooks/queries'
 import { UserTreeView } from '@/components/users/UserTreeView'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/context/AuthContext'
 
 const userSchema = z.object({
@@ -39,10 +37,15 @@ type EditRoleFormValues = z.infer<typeof editRoleSchema>
 
 
 export default function Users() {
-  const { userRole, userCollegeId, userDepartmentId } = useAuth()
+  const { user, userRole, userCollegeId, userDepartmentId } = useAuth()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<any>(null)
+  const [progressStudent, setProgressStudent] = useState<any>(null)
+
+  // Student progress dialog data (enabled only while a student is selected)
+  const { data: studentStats, isLoading: statsLoading } = useStudentStats(progressStudent?.id ?? undefined)
+  const { data: subjectStats, isLoading: subjectStatsLoading } = useSubjectStats(progressStudent?.id ?? undefined)
 
   const editForm = useForm<EditRoleFormValues>({
     resolver: zodResolver(editRoleSchema),
@@ -53,7 +56,7 @@ export default function Users() {
   const selectedEditDeptId = editForm.watch('department_id')
   
   const queryClient = useQueryClient()
-  const { data: hierarchy, isLoading } = useUserHierarchy()
+  const { data: hierarchy } = useUserHierarchy()
   const { data: colleges } = useColleges()
   const { data: departments } = useDepartments()
   const { data: classes } = useClasses()
@@ -173,22 +176,6 @@ export default function Users() {
 
   const onSubmit = (values: UserFormValues) => {
     inviteUserMutation.mutate(values)
-  }
-
-  const getRoleBadgeColor = (role: string) => {
-    switch(role) {
-      case 'super_admin': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-      case 'principal': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-      case 'hod': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
-      case 'class_teacher': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-      case 'faculty': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-      default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
-    }
-  }
-
-  const formatRole = (role: string) => {
-    if (role === 'hod') return 'HOD'
-    return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
   }
 
   return (
@@ -449,12 +436,69 @@ export default function Users() {
         </DialogContent>
       </Dialog>
 
+      {/* Student Progress & Attendance dialog */}
+      <Dialog open={!!progressStudent} onOpenChange={(open) => { if (!open) setProgressStudent(null) }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Progress &amp; Attendance</DialogTitle>
+            <DialogDescription>
+              {progressStudent?.first_name} {progressStudent?.last_name}
+              {progressStudent?.email ? ` — ${progressStudent.email}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {statsLoading || subjectStatsLoading ? (
+            <div className="flex items-center justify-center py-8 text-slate-400 text-sm">
+              <Loader2 className="animate-spin mr-2" size={16} /> Loading attendance data...
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-900">
+                <div>
+                  <p className="text-sm text-slate-500">Overall Attendance</p>
+                  <p className={`text-2xl font-bold ${(studentStats?.attendance_percentage ?? 0) >= 75 ? 'text-green-600' : 'text-red-600'}`}>
+                    {studentStats?.attendance_percentage ?? 0}%
+                  </p>
+                </div>
+                <div className="text-right text-xs text-slate-500 space-y-0.5">
+                  <p>{studentStats?.attended_sessions ?? 0} attended</p>
+                  <p>{Math.max((studentStats?.total_sessions ?? 0) - (studentStats?.attended_sessions ?? 0), 0)} missed</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {(subjectStats || []).length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">No subjects found. Wait for lectures to be held.</p>
+                ) : (
+                  (subjectStats || []).map((sub: any) => (
+                    <div key={sub.subject_id ?? sub.subject_name} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{sub.subject_name}</span>
+                        <span className={(sub.attendance_percentage ?? 0) >= 75 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                          {sub.attendance_percentage ?? 0}%
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${(sub.attendance_percentage ?? 0) >= 75 ? 'bg-green-500' : 'bg-red-500'}`}
+                          style={{ width: `${Math.min(sub.attendance_percentage ?? 0, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400">{sub.attended_sessions ?? 0} / {sub.total_sessions ?? 0} lectures attended</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       
       {/* Search and Filters are hidden for Tree View for now, but can be added back */}
       {hierarchy ? (
         <UserTreeView 
           hierarchy={hierarchy} 
           userRole={userRole} 
+          currentUserId={user?.id ?? null}
           onEditRole={(user) => {
             setEditingUser(user)
             editForm.reset({ 
@@ -464,7 +508,8 @@ export default function Users() {
               roll_number: user.roll_number || '' 
             })
             setIsEditDialogOpen(true)
-          }} 
+          }}
+          onViewProgress={(student) => setProgressStudent(student)} 
         />
       ) : (
         <div className="flex items-center justify-center p-8 text-slate-500">No data available</div>

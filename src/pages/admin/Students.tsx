@@ -191,7 +191,7 @@ export default function Students() {
       setIsImportDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ['users'] })
       queryClient.invalidateQueries({ queryKey: ['enrollments'] })
-    } catch (err) {
+    } catch {
       toast.error('Failed to parse CSV file')
     } finally {
       setIsImporting(false)

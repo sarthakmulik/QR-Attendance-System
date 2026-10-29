@@ -13,6 +13,34 @@ export default function Login() {
   const { session } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [infoMsg, setInfoMsg] = useState('')
+
+  const handleForgotPassword = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setErrorMsg('')
+    setInfoMsg('')
+
+    // Read whatever the user has typed into the email field so far
+    const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]')
+    const email = emailInput?.value?.trim().toLowerCase()
+
+    if (!email) {
+      setErrorMsg('Enter your email address above first, then click "Forgot password?" to receive a reset link.')
+      return
+    }
+
+    setIsLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    })
+    setIsLoading(false)
+
+    if (error) {
+      setErrorMsg(error.message)
+      return
+    }
+    setInfoMsg(`Password reset link sent to ${email}. Open the link to set a new password.`)
+  }
 
   useEffect(() => {
     if (session) {
@@ -73,7 +101,7 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-slate-600 font-medium">Password</Label>
-                <a href="#" className="text-sm font-medium text-primary hover:underline">Forgot password?</a>
+                <a href="#" onClick={handleForgotPassword} className="text-sm font-medium text-primary hover:underline">Forgot password?</a>
               </div>
               <Input 
                 id="password" 
@@ -88,6 +116,12 @@ export default function Login() {
             {errorMsg && (
               <div className="p-3 rounded-md bg-destructive/15 text-destructive text-sm font-medium">
                 {errorMsg}
+              </div>
+            )}
+
+            {infoMsg && (
+              <div className="p-3 rounded-md bg-green-500/15 text-green-700 dark:text-green-400 text-sm font-medium">
+                {infoMsg}
               </div>
             )}
             

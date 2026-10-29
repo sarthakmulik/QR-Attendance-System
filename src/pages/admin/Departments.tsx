@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useDepartments, useColleges, useClasses, useUsers } from '@/hooks/queries'
 import { useAuth } from '@/context/AuthContext'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 const departmentSchema = z.object({
   college_id: z.string().optional(),

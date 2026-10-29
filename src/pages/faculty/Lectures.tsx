@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, Clock, Calendar as CalendarIcon, Loader2, Users, PlusCircle, Radio } from 'lucide-react'
+import { Play, Clock, Calendar as CalendarIcon, Loader2, Radio } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
@@ -20,8 +20,8 @@ export default function Lectures() {
   const [sessionDuration, setSessionDuration] = useState(60) // default 1 hour
 
   const { data: timetable, isLoading: isLoadingTimetable } = useTimetable()
-  const { data: classes, isLoading: isLoadingClasses } = useClasses()
-  const { data: subjects, isLoading: isLoadingSubjects } = useSubjects()
+  const { data: classes } = useClasses()
+  const { data: subjects } = useSubjects()
   const { data: activeSessions } = useActiveSessions()
 
   const myActiveSessions = activeSessions?.filter((s: any) => {

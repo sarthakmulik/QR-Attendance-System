@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/button'
 type UserTreeViewProps = {
   hierarchy: any
   userRole: string | null
+  currentUserId: string | null
   onEditRole: (user: any) => void
+  onViewProgress: (user: any) => void
 }
 
-export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewProps) {
+export function UserTreeView({ hierarchy, userRole, currentUserId, onEditRole, onViewProgress }: UserTreeViewProps) {
   const { users, classes, enrollments, timetable } = hierarchy
 
   const tree = useMemo(() => {
@@ -78,7 +80,12 @@ export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewPr
     const unassignedStaff = groupedByDept.get('unassigned') || []
 
     return { hodsWithStaff, allStaff, classTeachersWithStudents, unassignedStudents, unassignedStaff }
-  }, [hierarchy])
+  }, [users, classes, enrollments, timetable])
+
+  // A class teacher must only ever see THEIR OWN students — the previous
+  // implementation read classTeachersWithStudents[0] (the first CT in the
+  // payload), which could belong to a completely different teacher.
+  const myCtEntry = tree.classTeachersWithStudents.find((ct: any) => ct.id === currentUserId)
 
   // Helpers to render User Row
   const renderUserRow = (user: any, indent: number = 0, extraInfo?: string) => (
@@ -111,7 +118,9 @@ export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewPr
             Edit Role & Department
           </DropdownMenuItem>
           {user.role === 'student' && (
-            <DropdownMenuItem>View Progress & Attendance</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onViewProgress(user)}>
+              View Progress &amp; Attendance
+            </DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -210,7 +219,13 @@ export function UserTreeView({ hierarchy, userRole, onEditRole }: UserTreeViewPr
         {userRole === 'class_teacher' && (
           <div className="p-4 space-y-1 bg-white dark:bg-slate-950">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Your Students</h3>
-            {tree.classTeachersWithStudents[0]?.students?.map((student: any) => renderUserRow(student))}
+            {myCtEntry?.students?.length
+              ? myCtEntry.students.map((student: any) => renderUserRow(student))
+              : (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  No students assigned to your classes yet.
+                </div>
+              )}
           </div>
         )}
 

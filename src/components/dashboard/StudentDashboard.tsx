@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { CheckCircle, XCircle, Loader2, Calendar as CalendarIcon, BookOpen, Clock } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, BookOpen, Clock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useStudentStats, useSubjectStats, useSessionRecords } from '@/hooks/queries'
+import { useStudentStats, useSubjectStats } from '@/hooks/queries'
 
 export default function StudentDashboard() {
   const { user } = useAuth()

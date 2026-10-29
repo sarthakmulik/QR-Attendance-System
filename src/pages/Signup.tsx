@@ -50,8 +50,31 @@ export default function Signup() {
       p_email: email,
     })
 
-    const inviteResult = typeof inviteCheck === 'string' ? JSON.parse(inviteCheck) : inviteCheck
-    if (!inviteError && inviteResult && inviteResult.allowed === false) {
+    // Parse defensively: the RPC may return a JSON string or an object.
+    // The invite gate is FAIL-CLOSED: if the check errors or the result
+    // cannot be parsed, we must NOT let the signup proceed.
+    let inviteResult: { allowed?: boolean; message?: string } | null = null
+    if (typeof inviteCheck === 'string') {
+      try {
+        inviteResult = JSON.parse(inviteCheck)
+      } catch {
+        inviteResult = null
+      }
+    } else if (inviteCheck) {
+      inviteResult = inviteCheck as { allowed?: boolean; message?: string }
+    }
+
+    if (inviteError) {
+      setErrorMsg('Could not verify your invitation. Please try again in a moment; if it keeps failing, contact your administrator.')
+      setIsLoading(false)
+      return
+    }
+    if (!inviteResult) {
+      setErrorMsg('Could not verify your invitation. Please try again in a moment; if it keeps failing, contact your administrator.')
+      setIsLoading(false)
+      return
+    }
+    if (inviteResult.allowed === false) {
       setErrorMsg(inviteResult.message || 'This email has not been added by a Principal or HOD yet.')
       setIsLoading(false)
       return

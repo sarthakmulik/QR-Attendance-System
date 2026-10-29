@@ -77,6 +77,10 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
 
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+                {/* Unknown paths: send authenticated users back to their dashboard
+                    (ProtectedRoute sends unauthenticated ones to /login) */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Route>
           </Routes>

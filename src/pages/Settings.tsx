@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
@@ -28,6 +29,36 @@ export default function Settings() {
   const [emailNotifs, setEmailNotifs] = useState(true)
   const [smsNotifs, setSmsNotifs] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
+
+  // Change Password
+  const [isPwDialogOpen, setIsPwDialogOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [pwError, setPwError] = useState('')
+
+  const handleChangePassword = async () => {
+    setPwError('')
+    if (newPassword.length < 8) {
+      setPwError('Password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('Passwords do not match.')
+      return
+    }
+    setIsChangingPassword(true)
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setIsChangingPassword(false)
+    if (error) {
+      setPwError(error.message)
+      return
+    }
+    toast.success('Password changed successfully.')
+    setNewPassword('')
+    setConfirmPassword('')
+    setIsPwDialogOpen(false)
+  }
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -80,7 +111,7 @@ export default function Settings() {
     try {
       await signOut()
       navigate('/login')
-    } catch (error: any) {
+    } catch {
       toast.error('Error signing out')
     }
   }
@@ -129,10 +160,49 @@ export default function Settings() {
               Security
             </h3>
             <div className="space-y-4">
-              <Button variant="outline" className="w-full justify-start text-slate-600 dark:text-slate-300">
-                Change Password
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-slate-600 dark:text-slate-300">
+              <Dialog
+                open={isPwDialogOpen}
+                onOpenChange={(open) => {
+                  setIsPwDialogOpen(open)
+                  if (!open) {
+                    setPwError('')
+                    setNewPassword('')
+                    setConfirmPassword('')
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-slate-600 dark:text-slate-300">
+                    Change Password
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Change Password</DialogTitle>
+                    <DialogDescription>Choose a new password of at least 8 characters.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new_password">New Password</Label>
+                      <Input id="new_password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm_password">Confirm New Password</Label>
+                      <Input id="confirm_password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                    </div>
+                    {pwError && <p className="text-xs text-destructive">{pwError}</p>}
+                    <Button className="w-full gap-2" onClick={handleChangePassword} disabled={isChangingPassword}>
+                      {isChangingPassword && <Loader2 size={16} className="animate-spin" />}
+                      Update Password
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-slate-600 dark:text-slate-300"
+                onClick={() => toast.info('Two-factor authentication is not available yet.')}
+              >
                 Two-Factor Authentication
               </Button>
               <Button variant="destructive" className="w-full justify-start gap-2 mt-4" onClick={handleSignOut}>

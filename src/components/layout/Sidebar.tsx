@@ -1,8 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, BookOpen, Calendar, Settings, LogOut, CheckSquare, Building2, Building, GraduationCap, QrCode, Clock, Video, FileSpreadsheet } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, Calendar, Settings, LogOut, CheckSquare, Building2, Building, GraduationCap, QrCode, Clock, FileSpreadsheet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
-import { supabase } from '@/lib/supabase'
 
 interface SidebarProps {
   isMobileOpen?: boolean;

@@ -42,6 +42,7 @@ export function useUsers() {
           departments(name),
           enrollments (
             roll_number,
+            active,
             classes (
               id, name, semester, class_teacher_id
             )
@@ -49,7 +50,13 @@ export function useUsers() {
         `)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return data
+      // MOVE semantics: only ACTIVE enrollments represent a student's current
+      // class; historical (closed) rows would pollute roll-number search,
+      // sorting and chips with stale classes.
+      return (data || []).map((u: any) => ({
+        ...u,
+        enrollments: (u.enrollments || []).filter((e: any) => e.active !== false)
+      }))
     },
   })
 }

@@ -109,14 +109,15 @@ export default function Scanner() {
       const deviceInfo = `${deviceToken}|${navigator.userAgent}|${screenResolution}|${colorDepth}|${hardwareConcurrency}`
 
       // Function to actually hit the database with location data
-      const executeMarkAttendance = async (lat: number | null, lng: number | null) => {
+      const executeMarkAttendance = async (lat: number | null, lng: number | null, gpsAccuracy: number) => {
         try {
           const { data, error } = await supabase.rpc('mark_attendance', {
             p_session_id: payload.sessionId,
             p_token: payload.token,
             p_device_info: deviceInfo,
             p_lat: lat,
-            p_lng: lng
+            p_lng: lng,
+            p_gps_accuracy: gpsAccuracy
           })
 
           if (error) throw error
@@ -143,7 +144,9 @@ export default function Scanner() {
       if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            // Check GPS accuracy (Must be within 200 meters accuracy to prevent spoofing)
+            // Coarse quality gate only — the server applies the hard 50 m
+            // geofence with GPS-accuracy compensation; anything under 200 m
+            // accuracy still passes to the authoritative check.
             if (position.coords.accuracy > 200) {
               if (isComponentMounted.current) {
                 setScanResult({
@@ -154,7 +157,7 @@ export default function Scanner() {
               resetProcessing()
               return
             }
-            executeMarkAttendance(position.coords.latitude, position.coords.longitude)
+            executeMarkAttendance(position.coords.latitude, position.coords.longitude, position.coords.accuracy)
           },
           (error) => {
             let errorMsg = "Failed to get GPS location. Ensure your GPS is enabled."

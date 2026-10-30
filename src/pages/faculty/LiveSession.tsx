@@ -96,18 +96,28 @@ export default function LiveSession() {
 
   const endSession = async () => {
     setIsEnding(true)
-    const { error } = await supabase
-      .from('attendance_sessions')
-      .update({ is_active: false })
-      .eq('id', sessionId)
-      
+    // Authored close path: writes the ABSENCE ledger (students with no scan
+    // become absent rows) and appends the session.closed ERP outbox event —
+    // a plain UPDATE would skip both.
+    const { data, error } = await supabase.rpc('close_session', {
+      p_session_id: sessionId
+    })
+
     setIsEnding(false)
     if (error) {
-      toast.error('Failed to end session')
-    } else {
-      toast.success('Lecture ended successfully')
-      navigate('/faculty/lectures')
+      toast.error(error.message || 'Failed to end session')
+      return
     }
+    if (data?.success === false) {
+      toast.error(data.message || 'Failed to end session')
+      return
+    }
+    if (data?.absences_recorded > 0) {
+      toast.success(`Lecture ended — ${data.absences_recorded} absence(s) recorded`)
+    } else {
+      toast.success(data?.message || 'Lecture ended successfully')
+    }
+    navigate('/faculty/lectures')
   }
 
   if (!sessionId) return null
